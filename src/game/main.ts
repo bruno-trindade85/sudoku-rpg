@@ -5,10 +5,13 @@ import { AUTO, Game, Scale, Types } from 'phaser';
 // https://docs.phaser.io/api-documentation/typedef/types-core#gameconfig
 const config: Types.Core.GameConfig = {
     type: AUTO,
-    width: 1024,
-    height: 768,
+    width: 1920,
+    height: 1080,
     parent: 'game-container',
     backgroundColor: '#17191f',
+    pixelArt: true,
+    antialias: false,
+    roundPixels: true,
     scale: {
         // Mantém a proporção do jogo e centraliza o canvas quando a janela muda de tamanho.
         mode: Scale.FIT,

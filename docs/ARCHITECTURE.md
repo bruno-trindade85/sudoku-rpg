@@ -43,11 +43,11 @@ A modularização atual separa configuração de unidades, estado do tabuleiro, 
 
 ### Application bootstrap
 
-`src/main.ts` espera `DOMContentLoaded` e chama `StartGame`. `src/game/main.ts` cria a configuração Phaser: canvas de 1024x768, fundo escuro, escala `FIT`, centralização automática e apenas a cena `Game`.
+`src/main.ts` espera `DOMContentLoaded` e chama `StartGame`. `src/game/main.ts` cria a configuração Phaser: canvas lógico de 1920x1080, escala `FIT`, centralização automática e apenas a cena `Game`. A cena carrega `assets/backgrounds/dungeon-01.png` como fundo dimensionado proporcionalmente para cobrir a área lógica.
 
 ### `UnitConfig`
 
-Contém `UNIT_IDS`, o union type `UnitType`, `CharacterType` e a configuração das nove unidades. Cada registro possui ID, nome, símbolo e cor. `BoardState` usa `UnitType`; `SynergyManager` usa os IDs centralizados; `Game` usa os registros para construir cartas e peças.
+Contém `UNIT_IDS`, o union type `UnitType`, `CharacterType`, `UNIT_TEXTURES`, `UNIT_SPRITE_FLIP_X` e a configuração das nove unidades. Cada registro possui ID, nome, símbolo e cor; as duas configurações de sprite associam cada ID à chave Phaser e à orientação visual necessária. `BoardState` usa `UnitType`; `SynergyManager` usa os IDs centralizados; `Game` usa os registros para construir cartas e peças.
 
 Não há regras de Sudoku ou comportamento de classe neste módulo.
 
@@ -75,9 +75,9 @@ Operações principais:
 
 Implementa regras puras sobre um `ReadonlyMap` do tabuleiro:
 
-- `canPlace` rejeita célula ocupada ou repetição do tipo na linha, coluna ou região;
+- `canPlace` rejeita célula ocupada ou repetição do tipo na linha ou coluna; tipos repetidos são permitidos dentro da mesma região 3x3;
 - `canMoveOrSwap` valida simultaneamente o estado final das duas posições, ignorando origem e destino durante a simulação;
-- `isRegionComplete` exige nove células ocupadas e todos os nove tipos requeridos;
+- `isRegionComplete` exige que as nove células da região estejam ocupadas;
 - `getRegionIndex` converte linha/coluna no índice 0–8 da região.
 
 Depende dos tipos e dimensões de `BoardState`. Não altera estado.
@@ -92,7 +92,7 @@ Contém as definições lógicas das sinergias e seus resultados declarativos:
 | Manobra Tática | Paladino + Bárbaro | Adjacência ortogonal na mesma região | `repositionments: 1` |
 | Bênção da Natureza | Clérigo + Druida | Adjacência ortogonal na mesma região | `healing: 10` |
 
-`areOrthogonallyAdjacent` centraliza a condição de distância de Manhattan igual a 1. `getFormedSynergiesInRegion` retorna definições e pares de células; `getAllFormedSynergies` agrega as nove regiões para os indicadores visuais.
+`areOrthogonallyAdjacent` centraliza a condição de distância de Manhattan igual a 1. `getFormedSynergiesInRegion` retorna todos os pares distintos possíveis para cada sinergia na região, escolhendo aleatoriamente entre parceiros ortogonalmente adjacentes quando houver alternativas; `getAllFormedSynergies` agrega as nove regiões para os indicadores visuais.
 
 O módulo consulta dados lógicos derivados de `BoardState` e IDs de `UnitConfig`. Ele não aplica recompensas e não conhece `hasAttacked`.
 
@@ -127,11 +127,11 @@ Ele não depende de `PlayerState`: retorna o dano do ataque normal para que `Gam
 
 Cria e atualiza:
 
-- nome, avatar, HP e barra do Dragão;
+- nome, sprite, HP e barra do Dragão;
 - Fúria;
 - nome, HP e barra do Herói;
 - reposicionamentos e botão correspondente;
-- histórico de dano;
+- histórico de combate;
 - overlay de derrota e botão de reinício.
 
 Todos os valores são recebidos por parâmetro. Os callbacks de reposicionamento e reinício informam intenção a `Game`; `GameUI` não altera estado lógico.
@@ -149,7 +149,7 @@ Responsabilidades ainda presentes:
 - modo de reposicionamento e sua seleção de origem;
 - transição de completude da região e emissão/escuta de `region-completed`;
 - aplicação de cura e créditos retornados pelas sinergias;
-- lista de valores do histórico de dano (a apresentação fica em `GameUI`);
+- lista de eventos reais de combate (dano, cura e reposicionamento); a apresentação fica em `GameUI`;
 - coordenação da derrota e do reinício via `scene.restart()`;
 - todos os efeitos temporários: pulsos, shakes, flashes, textos flutuantes, linhas de sinergia e animações de ataque/dano.
 
@@ -171,7 +171,7 @@ O mapa `pieceVisuals` associa células a objetos Phaser, mas não é a fonte de 
 | Dano-base de região e ataque normal do Dragão | `CombatManager` |
 | Objetos e valores exibidos no HUD | `GameUI` recebe valores; não é fonte lógica |
 | Objetos visuais das peças e efeitos temporários | `Game` |
-| Valores exibidos no histórico de dano | lista simples em `Game`; renderização em `GameUI` |
+| Valores exibidos no histórico de combate | lista de eventos em `Game`; renderização em `GameUI` |
 
 ## Main Game Flows
 

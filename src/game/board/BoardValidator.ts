@@ -1,6 +1,12 @@
 import { GRID_SIZE, REGION_SIZE, type BoardUnit } from './BoardState';
+import type { UnitType } from '../units/UnitConfig';
 
 export type Board = ReadonlyMap<number, BoardUnit>;
+
+export type InitialBoardClue = {
+    cellIndex: number;
+    unit: BoardUnit;
+};
 
 export function getRegionIndex(row: number, column: number): number {
     return Math.floor(row / REGION_SIZE) * REGION_SIZE + Math.floor(column / REGION_SIZE);
@@ -19,8 +25,6 @@ export function canPlace(
         return false;
     }
 
-    const targetRegion = getRegionIndex(row, column);
-
     for (const [cellIndex, unit] of board) {
         if (ignoredCellIndices.has(cellIndex) || unit.type !== unitType) {
             continue;
@@ -28,9 +32,7 @@ export function canPlace(
 
         const placedRow = Math.floor(cellIndex / GRID_SIZE);
         const placedColumn = cellIndex % GRID_SIZE;
-        const placedRegion = getRegionIndex(placedRow, placedColumn);
-
-        if (placedRow === row || placedColumn === column || placedRegion === targetRegion) {
+        if (placedRow === row || placedColumn === column) {
             return false;
         }
     }
@@ -61,10 +63,8 @@ export function canMoveOrSwap(board: Board, sourceCell: number, targetCell: numb
 export function isRegionComplete(
     board: Board,
     regionRow: number,
-    regionColumn: number,
-    requiredUnitTypes: readonly string[]
+    regionColumn: number
 ): boolean {
-    const unitTypesInRegion = new Set<string>();
     const firstRow = regionRow * REGION_SIZE;
     const firstColumn = regionColumn * REGION_SIZE;
 
@@ -75,11 +75,69 @@ export function isRegionComplete(
             if (!unit) {
                 return false;
             }
-
-            unitTypesInRegion.add(unit.type);
         }
     }
 
-    return unitTypesInRegion.size === requiredUnitTypes.length
-        && requiredUnitTypes.every((unitType) => unitTypesInRegion.has(unitType));
+    return true;
+}
+
+export function generateInitialBoardClues(
+    unitTypes: readonly UnitType[],
+    clueCount: number
+): InitialBoardClue[] {
+    if (unitTypes.length !== GRID_SIZE) {
+        throw new Error(`Expected ${GRID_SIZE} unit types to generate board clues.`);
+    }
+
+    const solvedBoard = new Map<number, BoardUnit>();
+    for (let row = 0; row < GRID_SIZE; row++) {
+        for (let column = 0; column < GRID_SIZE; column++) {
+            const unitTypeIndex = (row * REGION_SIZE + Math.floor(row / REGION_SIZE) + column) % GRID_SIZE;
+            solvedBoard.set(row * GRID_SIZE + column, { type: unitTypes[unitTypeIndex] });
+        }
+    }
+
+    const clueBoard = new Map<number, BoardUnit>();
+    const cluesPerRegion = new Map<number, number>();
+    for (const cellIndex of shuffle([...solvedBoard.keys()])) {
+        if (clueBoard.size === clueCount) {
+            break;
+        }
+
+        const unit = solvedBoard.get(cellIndex);
+        if (!unit) {
+            continue;
+        }
+
+        const row = Math.floor(cellIndex / GRID_SIZE);
+        const column = cellIndex % GRID_SIZE;
+        const regionIndex = getRegionIndex(row, column);
+
+        // Pistas não devem completar uma região antes da primeira jogada do jogador.
+        if ((cluesPerRegion.get(regionIndex) ?? 0) >= 4) {
+            continue;
+        }
+
+        if (canPlace(clueBoard, unit.type, row, column)) {
+            clueBoard.set(cellIndex, unit);
+            cluesPerRegion.set(regionIndex, (cluesPerRegion.get(regionIndex) ?? 0) + 1);
+        }
+    }
+
+    if (clueBoard.size !== clueCount) {
+        throw new Error(`Unable to generate ${clueCount} valid board clues.`);
+    }
+
+    return [...clueBoard.entries()].map(([cellIndex, unit]) => ({ cellIndex, unit }));
+}
+
+function shuffle<T>(items: readonly T[]): T[] {
+    const shuffled = [...items];
+
+    for (let index = shuffled.length - 1; index > 0; index--) {
+        const randomIndex = Math.floor(Math.random() * (index + 1));
+        [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
+    }
+
+    return shuffled;
 }

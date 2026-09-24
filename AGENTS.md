@@ -10,6 +10,7 @@ Responsável por:
 
 - IDs tipados das nove classes;
 - nome, símbolo e cor de cada unidade;
+- associação de cada classe à chave do sprite Phaser;
 - tipos `UnitType` e `CharacterType`.
 
 Não é responsável por regras de colocação, estado do tabuleiro, sinergias ou objetos Phaser.
@@ -31,7 +32,7 @@ Não é responsável por validar Sudoku, aplicar combate ou renderizar o tabulei
 
 Responsável por:
 
-- validar célula ocupada e repetição por linha, coluna e região;
+- validar célula ocupada e repetição por linha e coluna;
 - validar colocação;
 - validar o estado final de movimento ou swap, ignorando origem e destino durante a simulação;
 - verificar se uma região está completa e válida;
@@ -77,7 +78,7 @@ Não é responsável pelo HP do Herói, pela detecção das sinergias, por `hasA
 Responsável por:
 
 - criar e atualizar o HUD do Dragão, Herói, Fúria e reposicionamentos;
-- apresentar o histórico de dano;
+- apresentar o histórico de combate;
 - apresentar a derrota e o botão de reinício;
 - expor referências visuais necessárias aos efeitos que ainda vivem na cena.
 
@@ -92,7 +93,7 @@ Não é fonte de verdade de nenhum valor lógico e não decide derrota, dano, cu
 - manter o mapa de objetos visuais das peças (não o estado lógico delas);
 - coordenar conclusão e primeiro ataque das regiões;
 - aplicar ao `PlayerState` recompensas detectadas pelo `SynergyManager`;
-- manter a lista de dano usada pelo histórico;
+- manter a lista de eventos usada pelo histórico de combate;
 - todos os efeitos temporários, pulsos, flashes, shakes, conexões e animações;
 - sincronizar as fontes de verdade com `GameUI`;
 - coordenar derrota e reinício da cena.
@@ -102,13 +103,13 @@ Não adicione automaticamente novas regras de gameplay em `Game.ts`. Primeiro id
 ### Bootstrap
 
 - `src/main.ts` aguarda o DOM e inicia o jogo.
-- `src/game/main.ts` configura Phaser em 1024x768, escala `FIT`, centralização e a cena `Game`.
+- `src/game/main.ts` configura Phaser em 1920x1080, escala `FIT`, centralização e a cena `Game`.
 
 ## Current Mechanics
 
 - Tabuleiro 9x9 dividido em regiões 3x3.
 - Nove classes substituem os números: Mago, Arqueiro, Paladino, Ladino, Clérigo, Bárbaro, Druida, Feiticeiro Sombrio e Invocador.
-- Uma classe não pode se repetir na mesma linha, coluna ou região.
+- Uma classe não pode se repetir na mesma linha ou coluna, mas pode se repetir dentro da mesma região 3x3.
 - Colocação válida de uma nova peça concede `+1` Fúria; movimento, swap e tentativa inválida não concedem Fúria.
 - Herói: `100` HP máximo e inicial. Dragão: `500` HP máximo e inicial.
 - Fúria do Dragão: `0/5`; ao chegar a `5`, causa `10` de dano ao Herói e volta para `0`.
@@ -121,7 +122,9 @@ Não adicione automaticamente novas regras de gameplay em `Game.ts`. Primeiro id
 
 As sinergias exigem que o par esteja ortogonalmente adjacente dentro da mesma região 3x3. Diagonal não conta. A detecção pode continuar ativa após o ataque da região, inclusive para indicadores visuais, mas recompensas só são aplicadas durante o primeiro ataque da região.
 
-- **Flecha Arcana:** Mago + Arqueiro; `+10` de dano. O ataque total da região passa de `50` para `60`.
+Uma mesma sinergia pode ser formada diversas vezes na região, desde que cada ocorrência use um par distinto. Quando houver mais de um parceiro ortogonal adjacente elegível, o pareamento é escolhido aleatoriamente.
+
+- **Flecha Arcana:** Mago + Arqueiro; `+10` de dano por par. Duas ocorrências adicionam `+20`, e o ataque total da região passa de `50` para `70`.
 - **Manobra Tática:** Paladino + Bárbaro; `+1` crédito de reposicionamento.
 - **Bênção da Natureza:** Clérigo + Druida; cura `10` HP, limitada ao máximo de `100`.
 
@@ -152,4 +155,3 @@ As três podem coexistir e são avaliadas independentemente.
 Quando uma alteração criar ou remover módulos, mover uma fonte de verdade, mudar responsabilidades ou alterar um fluxo arquitetural importante, verifique se `docs/ARCHITECTURE.md` precisa ser atualizado.
 
 Altere `AGENTS.md` somente quando mudarem as instruções, a estrutura ou as convenções relevantes para agentes. Não atualize documentação por mudanças triviais.
-

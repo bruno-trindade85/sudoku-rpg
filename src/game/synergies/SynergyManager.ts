@@ -70,10 +70,9 @@ export function getFormedSynergiesInRegion(
     const formedSynergies: FormedSynergy[] = [];
 
     for (const definition of SYNERGY_DEFINITIONS) {
-        const first = units.find((entry) => entry.unit.type === definition.unitTypes[0]);
-        const second = units.find((entry) => entry.unit.type === definition.unitTypes[1]);
+        const pairs = getAdjacentPairs(units, definition.unitTypes);
 
-        if (first && second && areOrthogonallyAdjacent(first, second)) {
+        for (const [first, second] of pairs) {
             formedSynergies.push({
                 definition,
                 pair: [first.cellIndex, second.cellIndex],
@@ -84,6 +83,68 @@ export function getFormedSynergiesInRegion(
     }
 
     return formedSynergies;
+}
+
+function getAdjacentPairs(
+    units: readonly LocatedUnit[],
+    unitTypes: readonly [UnitType, UnitType]
+): Array<readonly [LocatedUnit, LocatedUnit]> {
+    const firstUnits = shuffle(units.filter((entry) => entry.unit.type === unitTypes[0]));
+    const matchedFirstBySecond = new Map<number, LocatedUnit>();
+
+    for (const first of firstUnits) {
+        const visitedSecondCells = new Set<number>();
+        findAugmentingPair(first, units, unitTypes[1], matchedFirstBySecond, visitedSecondCells);
+    }
+
+    return [...matchedFirstBySecond.entries()].map(([secondCellIndex, first]) => {
+        const second = units.find((entry) => entry.cellIndex === secondCellIndex);
+
+        if (!second) {
+            throw new Error('Matched synergy unit was not found in its region.');
+        }
+
+        return [first, second];
+    });
+}
+
+function findAugmentingPair(
+    first: LocatedUnit,
+    units: readonly LocatedUnit[],
+    secondUnitType: UnitType,
+    matchedFirstBySecond: Map<number, LocatedUnit>,
+    visitedSecondCells: Set<number>
+): boolean {
+    const adjacentSeconds = shuffle(units.filter((candidate) =>
+        candidate.unit.type === secondUnitType && areOrthogonallyAdjacent(first, candidate)
+    ));
+
+    for (const second of adjacentSeconds) {
+        if (visitedSecondCells.has(second.cellIndex)) {
+            continue;
+        }
+
+        visitedSecondCells.add(second.cellIndex);
+        const matchedFirst = matchedFirstBySecond.get(second.cellIndex);
+
+        if (!matchedFirst || findAugmentingPair(matchedFirst, units, secondUnitType, matchedFirstBySecond, visitedSecondCells)) {
+            matchedFirstBySecond.set(second.cellIndex, first);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function shuffle<T>(items: readonly T[]): T[] {
+    const shuffled = [...items];
+
+    for (let index = shuffled.length - 1; index > 0; index--) {
+        const randomIndex = Math.floor(Math.random() * (index + 1));
+        [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
+    }
+
+    return shuffled;
 }
 
 export function getAllFormedSynergies(board: ReadonlyMap<number, BoardUnit>): FormedSynergy[] {

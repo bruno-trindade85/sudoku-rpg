@@ -1,5 +1,5 @@
 import { Scene } from 'phaser';
-import { CHARACTER_TYPES, type CharacterType } from '../units/UnitConfig';
+import { CHARACTER_TYPES, UNIT_SPRITE_FLIP_X, UNIT_TEXTURES, type CharacterType } from '../units/UnitConfig';
 import { BoardState, GRID_SIZE, REGION_SIZE } from '../board/BoardState';
 import {
     canMoveOrSwap,
@@ -10,27 +10,39 @@ import {
 import {
     getAllFormedSynergies,
     getFormedSynergiesInRegion,
+    type FormedSynergy,
     type SynergyDefinition
 } from '../synergies/SynergyManager';
 import { PlayerState } from '../player/PlayerState';
 import { CombatManager } from '../combat/CombatManager';
-import { GameUI } from '../ui/GameUI';
+import { GameUI, type CombatHistoryEvent } from '../ui/GameUI';
 
-// O tabuleiro segue a estrutura do Sudoku: 9x9, dividido em regiões 3x3.
-// Cada classe de personagem representa um dos nove valores possíveis.
-const CELL_SIZE = 64;
-// Tamanho total do tabuleiro em pixels.
+const GAME_WIDTH = 1920;
+const GAME_HEIGHT = 1080;
+const CELL_SIZE = 92;
 const BOARD_SIZE = GRID_SIZE * CELL_SIZE;
+const BOARD_X = (GAME_WIDTH - BOARD_SIZE) / 2;
+const BOARD_Y = (GAME_HEIGHT - BOARD_SIZE) / 2 - 45;
+const BACKGROUND_TEXTURE_KEY = 'dungeon-background';
+const UNIT_CARD_WIDTH = 140;
+const UNIT_CARD_HEIGHT = 90;
+const UNIT_CARD_GAP = 16;
+const UNIT_CARD_BOTTOM_MARGIN = 18;
+const UNIT_SPRITE_SCALE = 2;
 type PlacedCharacter = {
     type: string;
-    circle: Phaser.GameObjects.Arc;
-    label: Phaser.GameObjects.Text;
+    sprite: Phaser.GameObjects.Image;
+};
+
+type CharacterCardVisual = {
+    container: Phaser.GameObjects.Container;
+    background: Phaser.GameObjects.Rectangle;
 };
 
 const COLORS = {
     board: 0xf6f1e7,
-    cellLine: 0x77736c,
-    regionLine: 0x24221f,
+    cellLine: 0x35332f,
+    regionLine: 0x121110,
     hover: 0xf0b429,
     selection: 0x4c8dff,
     invalid: 0xe05252,
@@ -48,7 +60,7 @@ export class Game extends Scene {
     private readonly combatManager = new CombatManager();
     private readonly pieceVisuals = new Map<number, PlacedCharacter>();
     private gameUI!: GameUI;
-    private damageHistory: number[] = [];
+    private combatHistory: CombatHistoryEvent[] = [];
     private isRepositionMode = false;
     private repositionSourceCell?: number;
     private boardX = 0;
@@ -64,12 +76,20 @@ export class Game extends Scene {
         super('Game');
     }
 
+    preload() {
+        this.load.image(BACKGROUND_TEXTURE_KEY, 'assets/backgrounds/dungeon-01.png');
+        CHARACTER_TYPES.forEach((character) => {
+            this.load.image(UNIT_TEXTURES[character.id], `assets/units/${UNIT_TEXTURES[character.id]}.png`);
+        });
+        this.load.image('dragon', 'assets/enemies/dragon.png');
+    }
+
     create() {
-        // Centraliza o tabuleiro no canvas do Phaser.
-        const boardX = (this.scale.width - BOARD_SIZE) / 2;
-        const boardY = (this.scale.height - BOARD_SIZE) / 2;
+        const boardX = BOARD_X;
+        const boardY = BOARD_Y;
         this.boardX = boardX;
         this.boardY = boardY;
+        this.createDungeonBackground();
         const graphics = this.add.graphics();
         const hoverHighlight = this.add.rectangle(0, 0, CELL_SIZE - 6, CELL_SIZE - 6, COLORS.hover, 0.2)
             .setVisible(false);
@@ -82,7 +102,7 @@ export class Game extends Scene {
             .setVisible(false);
         let selectedCell = -1;
         let selectedCharacter: CharacterType | undefined;
-        const characterCards = new Map<string, Phaser.GameObjects.Rectangle>();
+        const characterCards = new Map<string, CharacterCardVisual>();
         const showInvalidCell = (x: number, y: number) => {
             this.showInvalidCell(x, y);
         };
@@ -93,7 +113,7 @@ export class Game extends Scene {
         this.boardState.reset();
         this.playerState.reset();
         this.combatManager.reset();
-        this.damageHistory = [];
+        this.combatHistory = [];
         this.isRepositionMode = false;
         this.repositionSourceCell = undefined;
         this.events.off('region-completed', this.handleRegionAttack, this);
@@ -105,10 +125,10 @@ export class Game extends Scene {
         this.updateHeroInterface();
         this.updateFuryInterface();
         this.updateRepositionInterface();
-        this.gameUI.updateDamageHistory(this.damageHistory);
+        this.gameUI.updateCombatHistory(this.combatHistory);
         this.refreshSynergyIndicators();
 
-        graphics.fillStyle(COLORS.board);
+        graphics.fillStyle(COLORS.board, 0.13);
         graphics.fillRect(boardX, boardY, BOARD_SIZE, BOARD_SIZE);
 
         // Linhas mais grossas marcam os limites das nove regiões 3x3.
@@ -118,7 +138,7 @@ export class Game extends Scene {
             const lineColor = isRegionBoundary ? COLORS.regionLine : COLORS.cellLine;
             const offset = index * CELL_SIZE;
 
-            graphics.lineStyle(lineWidth, lineColor);
+            graphics.lineStyle(lineWidth, lineColor, isRegionBoundary ? 0.9 : 0.58);
             graphics.lineBetween(boardX + offset, boardY, boardX + offset, boardY + BOARD_SIZE);
             graphics.lineBetween(boardX, boardY + offset, boardX + BOARD_SIZE, boardY + offset);
         }
@@ -181,38 +201,40 @@ export class Game extends Scene {
             }
         }
 
-        const unitAreaY = boardY + BOARD_SIZE + (this.scale.height - boardY - BOARD_SIZE) / 2;
-        const cardWidth = 142;
-        const cardHeight = 20;
-        const cardGap = 10;
-        const cardColumns = 3;
-        const cardStartX = this.scale.width / 2 - cardWidth - cardGap;
-        const cardStartY = unitAreaY - 17;
+        const cardsRowWidth = CHARACTER_TYPES.length * UNIT_CARD_WIDTH + (CHARACTER_TYPES.length - 1) * UNIT_CARD_GAP;
+        const cardsRowY = this.scale.height - UNIT_CARD_HEIGHT / 2 - UNIT_CARD_BOTTOM_MARGIN;
+        const cardStartX = (this.scale.width - cardsRowWidth) / 2 + UNIT_CARD_WIDTH / 2;
+        const titleY = cardsRowY - UNIT_CARD_HEIGHT / 2 - 10;
 
-        this.add.rectangle(this.scale.width / 2, unitAreaY, 500, 86, COLORS.unitArea);
-        this.add.text(282, unitAreaY - 34, 'Unidades', {
+        this.add.rectangle(this.scale.width / 2, cardsRowY, cardsRowWidth + 32, UNIT_CARD_HEIGHT + 10, COLORS.unitArea, 0.72);
+        this.add.text(this.scale.width / 2, titleY, 'Unidades', {
             fontFamily: 'Arial',
-            fontSize: 14,
+            fontSize: 17,
             color: '#ffffff'
         }).setOrigin(0.5);
 
         CHARACTER_TYPES.forEach((character, index) => {
-            const row = Math.floor(index / cardColumns);
-            const column = index % cardColumns;
-            const cardX = cardStartX + column * (cardWidth + cardGap);
-            const cardY = cardStartY + row * (cardHeight + 3);
-            const card = this.add.rectangle(cardX, cardY, cardWidth, cardHeight, COLORS.unitCard)
-                .setStrokeStyle(1, COLORS.unitCard)
+            const cardX = cardStartX + index * (UNIT_CARD_WIDTH + UNIT_CARD_GAP);
+            const cardY = cardsRowY;
+            const cardBackground = this.add.rectangle(0, 0, UNIT_CARD_WIDTH, UNIT_CARD_HEIGHT, COLORS.unitCard, 0.92)
+                .setStrokeStyle(2, character.color, 0.85);
+            const cardAccent = this.add.circle(0, UNIT_CARD_HEIGHT / 2 - 9, 4, character.color);
+            const symbol = this.add.text(0, -12, character.symbol, {
+                fontFamily: 'Arial Black',
+                fontSize: 34,
+                color: '#ffffff'
+            }).setOrigin(0.5);
+            const name = this.add.text(0, 26, character.name.toUpperCase(), {
+                fontFamily: 'Arial Black',
+                fontSize: character.name.length > 12 ? 10 : 12,
+                color: '#ffffff'
+            }).setOrigin(0.5);
+            const card = this.add.container(cardX, cardY, [cardBackground, cardAccent, symbol, name])
+                .setSize(UNIT_CARD_WIDTH, UNIT_CARD_HEIGHT)
                 .setInteractive({ useHandCursor: true });
             this.input.setDraggable(card);
 
-            characterCards.set(character.id, card);
-            this.add.circle(cardX - cardWidth / 2 + 13, cardY, 7, character.color);
-            this.add.text(cardX - cardWidth / 2 + 26, cardY, `${character.symbol}  ${character.name}`, {
-                fontFamily: 'Arial',
-                fontSize: 12,
-                color: '#ffffff'
-            }).setOrigin(0, 0.5);
+            characterCards.set(character.id, { container: card, background: cardBackground });
 
             card.on('pointerdown', () => {
                 if (this.playerState.isDefeated()) {
@@ -222,7 +244,26 @@ export class Game extends Scene {
                 selectedCharacter = character;
                 updateCharacterCardSelection();
             });
-            card.on('dragstart', () => this.startCardDrag(character, cardX, cardY));
+            card.on('pointerover', () => {
+                if (this.playerState.isDefeated()) {
+                    return;
+                }
+
+                this.tweens.killTweensOf(card);
+                this.tweens.add({ targets: card, y: cardY - 8, scaleX: 1.03, scaleY: 1.03, duration: 140, ease: 'Sine.Out' });
+            });
+            card.on('pointerout', () => {
+                this.tweens.killTweensOf(card);
+                this.tweens.add({ targets: card, y: cardY, scaleX: 1, scaleY: 1, duration: 140, ease: 'Sine.Out' });
+            });
+            card.on('dragstart', () => {
+                if (!this.playerState.isDefeated()) {
+                    this.tweens.killTweensOf(card);
+                    card.setScale(1);
+                    card.setAlpha(0.55);
+                }
+                this.startCardDrag(character, cardX, cardY);
+            });
             card.on('drag', (pointer: Phaser.Input.Pointer) => {
                 if (this.playerState.isDefeated()) {
                     return;
@@ -234,6 +275,8 @@ export class Game extends Scene {
             });
             card.on('dragend', (pointer: Phaser.Input.Pointer) => {
                 card.setPosition(cardX, cardY);
+                card.setScale(1);
+                card.setAlpha(1);
                 this.finishCardDrag(character, pointer.worldX, pointer.worldY);
             });
         });
@@ -241,10 +284,20 @@ export class Game extends Scene {
         const updateCharacterCardSelection = () => {
             for (const [characterId, card] of characterCards) {
                 const isSelected = characterId === selectedCharacter?.id;
-                card.setFillStyle(isSelected ? COLORS.unitCardSelected : COLORS.unitCard);
-                card.setStrokeStyle(isSelected ? 2 : 1, isSelected ? selectedCharacter?.color ?? COLORS.unitCard : COLORS.unitCard);
+                card.background.setFillStyle(isSelected ? COLORS.unitCardSelected : COLORS.unitCard);
+                const characterColor = CHARACTER_TYPES.find((character) => character.id === characterId)?.color ?? COLORS.unitCard;
+                card.background.setStrokeStyle(isSelected ? 3 : 2, characterColor, isSelected ? 1 : 0.85);
             }
         };
+    }
+
+    private createDungeonBackground() {
+        const background = this.add.image(this.scale.width / 2, this.scale.height / 2, BACKGROUND_TEXTURE_KEY)
+            .setDepth(-100);
+        const source = background.texture.getSourceImage() as HTMLImageElement;
+        const scale = Math.max(this.scale.width / source.width, this.scale.height / source.height);
+
+        background.setScale(scale);
     }
 
     private tryPlaceCharacter(character: CharacterType, cellIndex: number, row: number, column: number, x: number, y: number): boolean {
@@ -257,7 +310,7 @@ export class Game extends Scene {
         this.pieceVisuals.set(cellIndex, placedCharacter);
         this.updateRegionState(row, column, this.boardX, this.boardY);
         this.refreshSynergyIndicators();
-        this.playPlacementAnimation(placedCharacter);
+        this.playSummonAnimation(placedCharacter);
         this.increaseDragonFury();
         return true;
     }
@@ -290,6 +343,7 @@ export class Game extends Scene {
         this.movePieceVisual(movingCharacter, { x: targetX, y: targetY });
         this.playerState.consumeRepositionCredit();
         this.updateRepositionInterface();
+        this.recordCombatEvent({ type: 'reposition' });
         this.updateRegionState(targetRowAtSource, targetColumnAtSource, this.boardX, this.boardY);
         this.updateRegionState(targetRow, targetColumn, this.boardX, this.boardY);
         this.refreshSynergyIndicators();
@@ -299,25 +353,21 @@ export class Game extends Scene {
     }
 
     private placeCharacter(character: CharacterType, x: number, y: number): PlacedCharacter {
-        const circle = this.add.circle(x, y, 22, character.color);
-        const label = this.add.text(x, y, character.symbol, {
-            fontFamily: 'Arial Black',
-            fontSize: 26,
-            color: '#ffffff'
-        }).setOrigin(0.5);
+        const sprite = this.add.image(x, y, UNIT_TEXTURES[character.id])
+            .setScale(UNIT_SPRITE_SCALE)
+            .setFlipX(UNIT_SPRITE_FLIP_X[character.id])
+            .setInteractive({ useHandCursor: true });
+        const placedCharacter = { type: character.id, sprite };
 
-        const placedCharacter = { type: character.id, circle, label };
-
-        circle.setInteractive({ useHandCursor: true });
-        this.input.setDraggable(circle);
-        circle.on('pointerdown', () => {
+        this.input.setDraggable(sprite);
+        sprite.on('pointerdown', () => {
             if (this.isRepositionMode) {
                 this.repositionSourceCell = this.findPieceCell(placedCharacter);
             }
         });
-        circle.on('dragstart', () => this.startPieceDrag(placedCharacter));
-        circle.on('drag', (pointer: Phaser.Input.Pointer) => this.updatePieceDrag(placedCharacter, pointer.worldX, pointer.worldY));
-        circle.on('dragend', (pointer: Phaser.Input.Pointer) => this.finishPieceDrag(placedCharacter, pointer.worldX, pointer.worldY));
+        sprite.on('dragstart', () => this.startPieceDrag(placedCharacter));
+        sprite.on('drag', (pointer: Phaser.Input.Pointer) => this.updatePieceDrag(placedCharacter, pointer.worldX, pointer.worldY));
+        sprite.on('dragend', (pointer: Phaser.Input.Pointer) => this.finishPieceDrag(placedCharacter, pointer.worldX, pointer.worldY));
 
         return placedCharacter;
     }
@@ -341,17 +391,27 @@ export class Game extends Scene {
     }
 
     private movePieceVisual(piece: PlacedCharacter, position: { x: number; y: number }) {
-        piece.circle.setPosition(position.x, position.y);
-        piece.label.setPosition(position.x, position.y);
+        piece.sprite.setPosition(position.x, position.y);
     }
 
     private playPlacementAnimation(piece: PlacedCharacter) {
         this.tweens.add({
-            targets: [piece.circle, piece.label],
-            scaleX: 1.12,
-            scaleY: 1.12,
+            targets: piece.sprite,
+            scaleX: UNIT_SPRITE_SCALE * 1.12,
+            scaleY: UNIT_SPRITE_SCALE * 1.12,
             duration: 100,
             yoyo: true
+        });
+    }
+
+    private playSummonAnimation(piece: PlacedCharacter) {
+        piece.sprite.setScale(0).setAlpha(0);
+        this.tweens.add({
+            targets: piece.sprite,
+            scaleX: UNIT_SPRITE_SCALE,
+            scaleY: UNIT_SPRITE_SCALE,
+            alpha: 1,
+            duration: 180
         });
     }
 
@@ -375,7 +435,7 @@ export class Game extends Scene {
         this.cardDragText?.destroy();
         this.cardDragText = this.add.text(x, y, `${character.symbol}  ${character.name}`, {
             fontFamily: 'Arial Black',
-            fontSize: 12,
+            fontSize: 14,
             color: '#ffffff'
         }).setOrigin(0.5);
     }
@@ -579,7 +639,7 @@ export class Game extends Scene {
 
         if (isMaximum) {
             const warning = this.add.text(this.scale.width / 2, 104, 'FÚRIA MÁXIMA!', {
-                fontFamily: 'Arial Black', fontSize: 28, color: '#ff6b4a', stroke: '#17191f', strokeThickness: 5
+                fontFamily: 'Arial Black', fontSize: 30, color: '#ff6b4a', stroke: '#17191f', strokeThickness: 5
             }).setOrigin(0.5).setDepth(100);
             this.tweens.add({ targets: warning, y: 88, alpha: 0, duration: 600, onComplete: () => warning.destroy() });
         }
@@ -588,11 +648,19 @@ export class Game extends Scene {
     private playDragonAttackEffect(amount: number) {
         const dragonAvatar = this.gameUI.getDragonAvatar();
         if (dragonAvatar) {
-            this.tweens.add({ targets: dragonAvatar, scaleX: 1.3, scaleY: 1.3, angle: 6, duration: 70, yoyo: true, repeat: 2 });
+            this.tweens.add({
+                targets: dragonAvatar,
+                scaleX: dragonAvatar.scaleX * 1.3,
+                scaleY: dragonAvatar.scaleY * 1.3,
+                angle: 6,
+                duration: 70,
+                yoyo: true,
+                repeat: 2
+            });
         }
 
         const attackText = this.add.text(this.scale.width / 2, this.scale.height / 2, `ATAQUE DO DRAGÃO\n-${amount} HP`, {
-            fontFamily: 'Arial Black', fontSize: 30, color: '#ff6b4a', align: 'center', stroke: '#17191f', strokeThickness: 6
+            fontFamily: 'Arial Black', fontSize: 32, color: '#ff6b4a', align: 'center', stroke: '#17191f', strokeThickness: 6
         }).setOrigin(0.5).setDepth(100);
         this.tweens.add({ targets: attackText, y: attackText.y - 24, alpha: 0, duration: 700, onComplete: () => attackText.destroy() });
     }
@@ -613,8 +681,8 @@ export class Game extends Scene {
         }
 
         // O ataque combina o dano-base da região com bônus das sinergias ativas.
-        const activeSynergies = getFormedSynergiesInRegion(this.boardState.getCells(), regionRow, regionColumn)
-            .map((formedSynergy) => formedSynergy.definition);
+        const formedSynergies = getFormedSynergiesInRegion(this.boardState.getCells(), regionRow, regionColumn);
+        const activeSynergies = formedSynergies.map((formedSynergy) => formedSynergy.definition);
         const synergyBonus = activeSynergies.reduce((total, synergy) => total + synergy.bonusDamage, 0);
         const damage = this.combatManager.attackDragonFromRegion(synergyBonus);
 
@@ -623,7 +691,7 @@ export class Game extends Scene {
         this.showBossDamageFeedback(damage);
         this.playBossHitEffect();
         this.applySynergyRewards(activeSynergies);
-        activeSynergies.forEach((synergy, index) => this.playSynergyActivation(synergy, regionRow, regionColumn, index * 160));
+        formedSynergies.forEach((formedSynergy, index) => this.playSynergyActivation(formedSynergy, index * 160));
     }
 
     private applySynergyRewards(synergies: SynergyDefinition[]) {
@@ -641,13 +709,23 @@ export class Game extends Scene {
     }
 
     private healHero(amount: number) {
+        const hpBeforeHealing = this.playerState.getCurrentHp();
         this.playerState.heal(amount);
+        const healedAmount = this.playerState.getCurrentHp() - hpBeforeHealing;
         this.updateHeroInterface();
+
+        if (healedAmount > 0) {
+            this.recordCombatEvent({ type: 'healing', amount: healedAmount });
+        }
     }
 
     private recordBossDamage(amount: number) {
-        this.damageHistory.push(amount);
-        this.gameUI.updateDamageHistory(this.damageHistory);
+        this.recordCombatEvent({ type: 'damage', amount });
+    }
+
+    private recordCombatEvent(event: CombatHistoryEvent) {
+        this.combatHistory.push(event);
+        this.gameUI.updateCombatHistory(this.combatHistory);
     }
 
     private updateBossInterface() {
@@ -657,12 +735,15 @@ export class Game extends Scene {
     }
 
     private showBossDamageFeedback(amount: number) {
-        const panelX = this.scale.width / 2;
-        const panelY = 46;
-        const flash = this.add.circle(panelX - 140, panelY, 18, 0xffd25f, 0.8);
-        const damageText = this.add.text(panelX + 115, panelY - 10, `-${amount}`, {
+        const dragonAvatar = this.gameUI.getDragonAvatar();
+        if (!dragonAvatar) {
+            return;
+        }
+
+        const flash = this.add.circle(dragonAvatar.x, dragonAvatar.y, 18, 0xffd25f, 0.8);
+        const damageText = this.add.text(dragonAvatar.x + 255, dragonAvatar.y - 10, `-${amount}`, {
             fontFamily: 'Arial Black',
-            fontSize: 24,
+            fontSize: 26,
             color: '#ffd25f'
         }).setOrigin(0.5);
 
@@ -676,7 +757,7 @@ export class Game extends Scene {
         });
         this.tweens.add({
             targets: damageText,
-            y: panelY - 32,
+            y: dragonAvatar.y - 32,
             alpha: 0,
             duration: 550,
             onComplete: () => damageText.destroy()
@@ -698,14 +779,9 @@ export class Game extends Scene {
         });
     }
 
-    private playSynergyActivation(synergy: SynergyDefinition, regionRow: number, regionColumn: number, delay: number) {
+    private playSynergyActivation(formedSynergy: FormedSynergy, delay: number) {
         this.time.delayedCall(delay, () => {
-            const pair = getFormedSynergiesInRegion(this.boardState.getCells(), regionRow, regionColumn)
-                .find((formedSynergy) => formedSynergy.definition.id === synergy.id)?.pair;
-
-            if (!pair) {
-                return;
-            }
+            const { definition: synergy, pair } = formedSynergy;
 
             if (synergy.id === 'arcane-arrow') {
                 this.playArcaneArrowEffect(pair);
@@ -727,14 +803,17 @@ export class Game extends Scene {
             return;
         }
 
-        this.tweens.add({ targets: mage.circle, scaleX: 1.35, scaleY: 1.35, duration: 120, yoyo: true });
-        this.tweens.add({ targets: archer.circle, scaleX: 1.25, scaleY: 1.25, duration: 120, delay: 150, yoyo: true });
+        this.tweens.add({ targets: mage.sprite, scaleX: 2.7, scaleY: 2.7, duration: 120, yoyo: true });
+        this.tweens.add({ targets: archer.sprite, scaleX: 2.5, scaleY: 2.5, duration: 120, delay: 150, yoyo: true });
 
         const effect = this.add.graphics();
         effect.lineStyle(4, 0x9d81ff, 0.95);
-        effect.lineBetween(mage.circle.x, mage.circle.y, archer.circle.x, archer.circle.y);
+        effect.lineBetween(mage.sprite.x, mage.sprite.y, archer.sprite.x, archer.sprite.y);
         effect.lineStyle(3, 0xbca8ff, 0.9);
-        effect.lineBetween(archer.circle.x, archer.circle.y, this.scale.width / 2 - 140, 46);
+        const dragonAvatar = this.gameUI.getDragonAvatar();
+        if (dragonAvatar) {
+            effect.lineBetween(archer.sprite.x, archer.sprite.y, dragonAvatar.x, dragonAvatar.y);
+        }
         this.fadeAndDestroy(effect, 520);
     }
 
@@ -746,12 +825,12 @@ export class Game extends Scene {
             return;
         }
 
-        this.tweens.add({ targets: [paladin.circle, barbarian.circle], scaleX: 1.25, scaleY: 1.25, duration: 150, yoyo: true });
+        this.tweens.add({ targets: [paladin.sprite, barbarian.sprite], scaleX: 2.5, scaleY: 2.5, duration: 150, yoyo: true });
         const effect = this.add.graphics();
         effect.lineStyle(4, 0xf0b429, 0.9);
-        effect.lineBetween(paladin.circle.x, paladin.circle.y, barbarian.circle.x, barbarian.circle.y);
-        effect.strokeCircle(paladin.circle.x, paladin.circle.y, 29);
-        effect.strokeCircle(barbarian.circle.x, barbarian.circle.y, 29);
+        effect.lineBetween(paladin.sprite.x, paladin.sprite.y, barbarian.sprite.x, barbarian.sprite.y);
+        effect.strokeCircle(paladin.sprite.x, paladin.sprite.y, 29);
+        effect.strokeCircle(barbarian.sprite.x, barbarian.sprite.y, 29);
         this.fadeAndDestroy(effect, 480);
         this.playResourceGainEffect();
     }
@@ -764,13 +843,13 @@ export class Game extends Scene {
             return;
         }
 
-        this.tweens.add({ targets: cleric.circle, scaleX: 1.3, scaleY: 1.3, duration: 120, yoyo: true });
-        this.tweens.add({ targets: druid.circle, scaleX: 1.3, scaleY: 1.3, duration: 120, delay: 120, yoyo: true });
+        this.tweens.add({ targets: cleric.sprite, scaleX: 2.6, scaleY: 2.6, duration: 120, yoyo: true });
+        this.tweens.add({ targets: druid.sprite, scaleX: 2.6, scaleY: 2.6, duration: 120, delay: 120, yoyo: true });
         const effect = this.add.graphics();
         effect.lineStyle(5, 0x63d69b, 0.95);
-        effect.lineBetween(cleric.circle.x, cleric.circle.y, druid.circle.x, druid.circle.y);
-        effect.strokeCircle(cleric.circle.x, cleric.circle.y, 29);
-        effect.strokeCircle(druid.circle.x, druid.circle.y, 29);
+        effect.lineBetween(cleric.sprite.x, cleric.sprite.y, druid.sprite.x, druid.sprite.y);
+        effect.strokeCircle(cleric.sprite.x, cleric.sprite.y, 29);
+        effect.strokeCircle(druid.sprite.x, druid.sprite.y, 29);
         this.fadeAndDestroy(effect, 520);
 
         const heroPanel = this.gameUI.getHeroPanel();
@@ -804,16 +883,17 @@ export class Game extends Scene {
     }
 
     private showSynergyFeedback(synergy: SynergyDefinition) {
-        const panelX = this.scale.width / 2;
-        const panelY = 46;
+        const dragonAvatar = this.gameUI.getDragonAvatar();
+        const heroPanel = this.gameUI.getHeroPanel();
         const isNatureBlessing = synergy.id === 'natures-blessing';
         const feedbackColor = isNatureBlessing ? 0x63d69b : 0x8f71ff;
         const feedbackTextColor = isNatureBlessing ? '#63d69b' : '#bca8ff';
-        const feedbackX = isNatureBlessing ? this.scale.width - 118 : panelX - 140;
-        const arcanePulse = this.add.circle(feedbackX, panelY, 20, feedbackColor, 0.7);
-        const synergyText = this.add.text(panelX + 200, panelY, `${synergy.name.toUpperCase()}\n${synergy.feedbackText}`, {
+        const feedbackX = isNatureBlessing ? heroPanel?.x ?? 0 : dragonAvatar?.x ?? 0;
+        const feedbackY = isNatureBlessing ? heroPanel?.y ?? 0 : dragonAvatar?.y ?? 0;
+        const arcanePulse = this.add.circle(feedbackX, feedbackY, 20, feedbackColor, 0.7);
+        const synergyText = this.add.text(feedbackX + 200, feedbackY, `${synergy.name.toUpperCase()}\n${synergy.feedbackText}`, {
             fontFamily: 'Arial Black',
-            fontSize: 14,
+            fontSize: 16,
             color: feedbackTextColor,
             align: 'center'
         }).setOrigin(0.5);
@@ -828,7 +908,7 @@ export class Game extends Scene {
         });
         this.tweens.add({
             targets: synergyText,
-            y: panelY - 22,
+            y: feedbackY - 22,
             alpha: 0,
             duration: 750,
             onComplete: () => synergyText.destroy()
@@ -863,10 +943,10 @@ export class Game extends Scene {
             : synergy.id === 'natures-blessing' ? 0x63d69b : 0xf0b429;
         const lineWidth = synergy.id === 'arcane-arrow' ? 2 : 3;
         graphics.lineStyle(lineWidth, color, 0.6);
-        graphics.lineBetween(firstCharacter.circle.x, firstCharacter.circle.y, secondCharacter.circle.x, secondCharacter.circle.y);
+        graphics.lineBetween(firstCharacter.sprite.x, firstCharacter.sprite.y, secondCharacter.sprite.x, secondCharacter.sprite.y);
         graphics.lineStyle(2, color, 0.5);
-        graphics.strokeCircle(firstCharacter.circle.x, firstCharacter.circle.y, 26);
-        graphics.strokeCircle(secondCharacter.circle.x, secondCharacter.circle.y, 26);
+        graphics.strokeCircle(firstCharacter.sprite.x, firstCharacter.sprite.y, 26);
+        graphics.strokeCircle(secondCharacter.sprite.x, secondCharacter.sprite.y, 26);
         this.synergyConnectionGraphics.push(graphics);
 
         this.tweens.add({ targets: graphics, alpha: 0.45, duration: 260, yoyo: true });
@@ -879,8 +959,7 @@ export class Game extends Scene {
         const regionIsComplete = isRegionComplete(
             this.boardState.getCells(),
             regionRow,
-            regionColumn,
-            CHARACTER_TYPES.map((character) => character.id)
+            regionColumn
         );
         this.boardState.setRegionComplete(regionIndex, regionIsComplete);
         const regionState = this.boardState.getRegionState(regionIndex);
