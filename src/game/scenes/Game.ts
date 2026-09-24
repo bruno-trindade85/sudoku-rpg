@@ -1,102 +1,31 @@
 import { Scene } from 'phaser';
+import { CHARACTER_TYPES, type CharacterType } from '../units/UnitConfig';
+import { BoardState, GRID_SIZE, REGION_SIZE } from '../board/BoardState';
+import {
+    canMoveOrSwap,
+    canPlace,
+    getRegionIndex,
+    isRegionComplete
+} from '../board/BoardValidator';
+import {
+    getAllFormedSynergies,
+    getFormedSynergiesInRegion,
+    type SynergyDefinition
+} from '../synergies/SynergyManager';
+import { PlayerState } from '../player/PlayerState';
+import { CombatManager } from '../combat/CombatManager';
+import { GameUI } from '../ui/GameUI';
 
 // O tabuleiro segue a estrutura do Sudoku: 9x9, dividido em regiões 3x3.
 // Cada classe de personagem representa um dos nove valores possíveis.
-const GRID_SIZE = 9;
-const REGION_SIZE = 3;
 const CELL_SIZE = 64;
 // Tamanho total do tabuleiro em pixels.
 const BOARD_SIZE = GRID_SIZE * CELL_SIZE;
-// Dano-base causado quando o jogador completa uma região 3x3.
-const REGION_COMPLETION_DAMAGE = 50;
-
-// Dados visuais e identificador de uma classe disponível para colocação.
-type CharacterType = {
-    id: string;
-    name: string;
-    symbol: string;
-    color: number;
-};
-
-type Boss = {
-    name: string;
-    maxHp: number;
-    currentHp: number;
-};
-
-type RegionCharacter = {
-    type: string;
-    row: number;
-    column: number;
-};
-
-type RegionSynergy = {
-    id: string;
-    name: string;
-    characterTypes: [string, string];
-    bonusDamage: number;
-    repositionments: number;
-    feedbackText: string;
-    isActive: (characters: RegionCharacter[]) => boolean;
-};
-
 type PlacedCharacter = {
     type: string;
     circle: Phaser.GameObjects.Arc;
     label: Phaser.GameObjects.Text;
 };
-
-type RegionState = {
-    isCurrentlyComplete: boolean;
-    hasAttacked: boolean;
-};
-
-const CHARACTER_TYPES: CharacterType[] = [
-    { id: 'mage', name: 'Mago', symbol: 'M', color: 0x7b5cff },
-    { id: 'archer', name: 'Arqueiro', symbol: 'A', color: 0x4caf50 },
-    { id: 'paladin', name: 'Paladino', symbol: 'P', color: 0xe5b94d },
-    { id: 'rogue', name: 'Ladino', symbol: 'L', color: 0x65718a },
-    { id: 'cleric', name: 'Clérigo', symbol: 'C', color: 0xf3f0d9 },
-    { id: 'barbarian', name: 'Bárbaro', symbol: 'B', color: 0xcf5c4c },
-    { id: 'druid', name: 'Druida', symbol: 'D', color: 0x749b49 },
-    { id: 'dark-sorcerer', name: 'Feiticeiro Sombrio', symbol: 'F', color: 0x663b83 },
-    { id: 'summoner', name: 'Invocador', symbol: 'I', color: 0x3aa8b8 }
-];
-
-const REGION_SYNERGIES: RegionSynergy[] = [
-    {
-        id: 'arcane-arrow',
-        name: 'Flecha Arcana',
-        characterTypes: ['mage', 'archer'],
-        bonusDamage: 10,
-        repositionments: 0,
-        feedbackText: '+10 DANO',
-        isActive: (characters) => {
-            const mage = characters.find((character) => character.type === 'mage');
-            const archer = characters.find((character) => character.type === 'archer');
-
-            // Distância de Manhattan igual a 1 significa que as peças são vizinhas
-            // na horizontal ou vertical; diagonais não ativam a sinergia.
-            return Boolean(mage && archer
-                && Math.abs(mage.row - archer.row) + Math.abs(mage.column - archer.column) === 1);
-        }
-    },
-    {
-        id: 'tactical-maneuver',
-        name: 'Manobra Tática',
-        characterTypes: ['paladin', 'barbarian'],
-        bonusDamage: 0,
-        repositionments: 1,
-        feedbackText: '+1 REPOSICIONAMENTO',
-        isActive: (characters) => {
-            const paladin = characters.find((character) => character.type === 'paladin');
-            const barbarian = characters.find((character) => character.type === 'barbarian');
-
-            return Boolean(paladin && barbarian
-                && Math.abs(paladin.row - barbarian.row) + Math.abs(paladin.column - barbarian.column) === 1);
-        }
-    }
-];
 
 const COLORS = {
     board: 0xf6f1e7,
@@ -107,11 +36,6 @@ const COLORS = {
     invalid: 0xe05252,
     completedRegion: 0x63d69b,
     attackedRegionOverlay: 0x6b7280,
-    bossPanel: 0x302a32,
-    bossHp: 0xd94d54,
-    bossHpBackground: 0x17191f,
-    repositionPanel: 0x2d3748,
-    repositionActive: 0x7057bf,
     unitArea: 0x242833,
     unitCard: 0x3a4050,
     unitCardSelected: 0x5b4ec7,
@@ -119,20 +43,14 @@ const COLORS = {
 };
 
 export class Game extends Scene {
-    private placedCharacters = new Map<number, PlacedCharacter>();
-    private regionStates = new Map<number, RegionState>();
-    private boss: Boss = { name: 'Dragão', maxHp: 500, currentHp: 500 };
-    private bossHpText?: Phaser.GameObjects.Text;
-    private bossHpBar?: Phaser.GameObjects.Rectangle;
-    private bossAvatar?: Phaser.GameObjects.Arc;
+    private readonly boardState = new BoardState();
+    private readonly playerState = new PlayerState();
+    private readonly combatManager = new CombatManager();
+    private readonly pieceVisuals = new Map<number, PlacedCharacter>();
+    private gameUI!: GameUI;
     private damageHistory: number[] = [];
-    private damageHistoryText?: Phaser.GameObjects.Text;
-    private repositionments = 0;
     private isRepositionMode = false;
     private repositionSourceCell?: number;
-    private repositionText?: Phaser.GameObjects.Text;
-    private repositionButton?: Phaser.GameObjects.Rectangle;
-    private repositionButtonText?: Phaser.GameObjects.Text;
     private boardX = 0;
     private boardY = 0;
     private dragHighlight?: Phaser.GameObjects.Rectangle;
@@ -171,19 +89,23 @@ export class Game extends Scene {
 
         // A cena pode ser reiniciada; por isso o estado da partida é zerado antes
         // de recriar os elementos visuais e os eventos.
-        this.placedCharacters.clear();
-        this.regionStates.clear();
-        this.boss.currentHp = this.boss.maxHp;
+        this.pieceVisuals.clear();
+        this.boardState.reset();
+        this.playerState.reset();
+        this.combatManager.reset();
         this.damageHistory = [];
-        this.repositionments = 0;
         this.isRepositionMode = false;
         this.repositionSourceCell = undefined;
         this.events.off('region-completed', this.handleRegionAttack, this);
         this.events.on('region-completed', this.handleRegionAttack, this);
 
-        this.createBossInterface();
-        this.createDamageHistory(boardX, boardY);
-        this.createRepositionInterface();
+        this.gameUI = new GameUI(this);
+        this.gameUI.createHud(boardX, boardY, BOARD_SIZE, () => this.handleRepositionRequest());
+        this.updateBossInterface();
+        this.updateHeroInterface();
+        this.updateFuryInterface();
+        this.updateRepositionInterface();
+        this.gameUI.updateDamageHistory(this.damageHistory);
         this.refreshSynergyIndicators();
 
         graphics.fillStyle(COLORS.board);
@@ -217,12 +139,16 @@ export class Game extends Scene {
                 cell.on('pointerout', () => hoverHighlight.setVisible(false));
 
                 cell.on('pointerdown', () => {
+                    if (this.playerState.isDefeated()) {
+                        return;
+                    }
+
                     selectedCell = cellIndex;
                     hoverHighlight.setVisible(false);
                     selectionHighlight.setPosition(cellX, cellY).setVisible(true);
 
                     if (this.isRepositionMode) {
-                        const characterAtCell = this.placedCharacters.get(cellIndex);
+                        const characterAtCell = this.boardState.getCell(cellIndex);
 
                         if (this.repositionSourceCell === undefined) {
                             if (characterAtCell) {
@@ -234,7 +160,7 @@ export class Game extends Scene {
                         }
 
                         const sourceCell = this.repositionSourceCell;
-                        const characterToMove = this.placedCharacters.get(sourceCell);
+                        const characterToMove = this.boardState.getCell(sourceCell);
                         if (characterToMove && this.tryReposition(sourceCell, cellIndex, row, column, cellX, cellY)) {
                             this.isRepositionMode = false;
                             this.repositionSourceCell = undefined;
@@ -289,11 +215,19 @@ export class Game extends Scene {
             }).setOrigin(0, 0.5);
 
             card.on('pointerdown', () => {
+                if (this.playerState.isDefeated()) {
+                    return;
+                }
+
                 selectedCharacter = character;
                 updateCharacterCardSelection();
             });
             card.on('dragstart', () => this.startCardDrag(character, cardX, cardY));
             card.on('drag', (pointer: Phaser.Input.Pointer) => {
+                if (this.playerState.isDefeated()) {
+                    return;
+                }
+
                 card.setPosition(pointer.worldX, pointer.worldY);
                 this.cardDragText?.setPosition(pointer.worldX, pointer.worldY);
                 this.updateCardDragShadow(pointer.worldX, pointer.worldY);
@@ -314,44 +248,47 @@ export class Game extends Scene {
     }
 
     private tryPlaceCharacter(character: CharacterType, cellIndex: number, row: number, column: number, x: number, y: number): boolean {
-        if (this.placedCharacters.has(cellIndex) || !this.canPlaceCharacter(character.id, row, column)) {
+        if (this.playerState.isDefeated() || !canPlace(this.boardState.getCells(), character.id, row, column)) {
             return false;
         }
 
+        this.boardState.setCell(cellIndex, { type: character.id });
         const placedCharacter = this.placeCharacter(character, x, y);
-        this.placedCharacters.set(cellIndex, placedCharacter);
+        this.pieceVisuals.set(cellIndex, placedCharacter);
         this.updateRegionState(row, column, this.boardX, this.boardY);
         this.refreshSynergyIndicators();
         this.playPlacementAnimation(placedCharacter);
+        this.increaseDragonFury();
         return true;
     }
 
     private tryReposition(sourceCell: number, targetCell: number, targetRow: number, targetColumn: number, targetX: number, targetY: number): boolean {
-        const movingCharacter = this.placedCharacters.get(sourceCell);
-        const targetCharacter = this.placedCharacters.get(targetCell);
+        const movingCharacter = this.pieceVisuals.get(sourceCell);
+        const targetCharacter = this.pieceVisuals.get(targetCell);
 
-        if (!movingCharacter || sourceCell === targetCell || this.repositionments <= 0) {
+        if (this.playerState.isDefeated() || !movingCharacter || sourceCell === targetCell || !this.playerState.hasRepositionCredit()) {
             return false;
         }
         const targetRowAtSource = Math.floor(sourceCell / GRID_SIZE);
         const targetColumnAtSource = sourceCell % GRID_SIZE;
 
-        if (!this.canReposition(sourceCell, targetCell, targetRow, targetColumn)) {
+        if (!this.canAttemptReposition(sourceCell, targetCell)) {
             return false;
         }
 
-        // Se o destino estiver ocupado, as duas peças trocam de posição.
-        this.placedCharacters.set(targetCell, movingCharacter);
+        // A jogada já foi validada; primeiro altera o estado lógico e depois os visuais.
+        this.boardState.moveOrSwap(sourceCell, targetCell);
+        this.pieceVisuals.set(targetCell, movingCharacter);
 
         if (targetCharacter) {
-            this.placedCharacters.set(sourceCell, targetCharacter);
+            this.pieceVisuals.set(sourceCell, targetCharacter);
             this.movePieceVisual(targetCharacter, this.getCellCenter(targetRowAtSource, targetColumnAtSource));
         } else {
-            this.placedCharacters.delete(sourceCell);
+            this.pieceVisuals.delete(sourceCell);
         }
 
         this.movePieceVisual(movingCharacter, { x: targetX, y: targetY });
-        this.repositionments--;
+        this.playerState.consumeRepositionCredit();
         this.updateRepositionInterface();
         this.updateRegionState(targetRowAtSource, targetColumnAtSource, this.boardX, this.boardY);
         this.updateRegionState(targetRow, targetColumn, this.boardX, this.boardY);
@@ -430,6 +367,10 @@ export class Game extends Scene {
     }
 
     private startCardDrag(character: CharacterType, x: number, y: number) {
+        if (this.playerState.isDefeated()) {
+            return;
+        }
+
         this.dragHighlight?.setVisible(false);
         this.cardDragText?.destroy();
         this.cardDragText = this.add.text(x, y, `${character.symbol}  ${character.name}`, {
@@ -442,7 +383,7 @@ export class Game extends Scene {
     private updateCardDragShadow(x: number, y: number) {
         const cell = this.getCellAtPosition(x, y);
 
-        if (!cell) {
+        if (this.playerState.isDefeated() || !cell) {
             this.dragHighlight?.setVisible(false);
             return;
         }
@@ -465,14 +406,22 @@ export class Game extends Scene {
     }
 
     private startPieceDrag(piece: PlacedCharacter) {
+        if (this.playerState.isDefeated()) {
+            return;
+        }
+
         const sourceCell = this.findPieceCell(piece);
 
-        if (sourceCell !== undefined && this.repositionments > 0) {
+        if (sourceCell !== undefined && this.playerState.hasRepositionCredit()) {
             this.draggedPiece = { piece, sourceCell };
         }
     }
 
     private updatePieceDrag(piece: PlacedCharacter, x: number, y: number) {
+        if (this.playerState.isDefeated()) {
+            return;
+        }
+
         const drag = this.draggedPiece;
 
         if (!drag || drag.piece !== piece) {
@@ -491,11 +440,15 @@ export class Game extends Scene {
             return;
         }
 
-        const isValid = this.canReposition(drag.sourceCell, cell.cellIndex, cell.row, cell.column);
+        const isValid = this.canAttemptReposition(drag.sourceCell, cell.cellIndex);
         this.dragHighlight?.setPosition(cell.x, cell.y).setFillStyle(isValid ? 0x63d69b : COLORS.invalid).setVisible(true);
     }
 
     private finishPieceDrag(piece: PlacedCharacter, x: number, y: number) {
+        if (this.playerState.isDefeated()) {
+            return;
+        }
+
         const drag = this.draggedPiece;
         this.dragHighlight?.setVisible(false);
 
@@ -516,7 +469,7 @@ export class Game extends Scene {
     }
 
     private findPieceCell(piece: PlacedCharacter): number | undefined {
-        for (const [cellIndex, placedCharacter] of this.placedCharacters) {
+        for (const [cellIndex, placedCharacter] of this.pieceVisuals) {
             if (placedCharacter === piece) {
                 return cellIndex;
             }
@@ -525,155 +478,182 @@ export class Game extends Scene {
         return undefined;
     }
 
-    private canReposition(sourceCell: number, targetCell: number, targetRow: number, targetColumn: number): boolean {
-        const movingCharacter = this.placedCharacters.get(sourceCell);
-        const targetCharacter = this.placedCharacters.get(targetCell);
-
-        if (!movingCharacter || sourceCell === targetCell || this.repositionments <= 0) {
-            return false;
-        }
-
-        // Ignora origem e destino durante a simulação da troca, pois seus conteúdos
-        // serão removidos ou substituídos pelo movimento.
-        const ignoredCells = new Set([sourceCell, targetCell]);
-        const movingCharacterCanMove = this.canPlaceCharacter(movingCharacter.type, targetRow, targetColumn, ignoredCells);
-        const sourceRow = Math.floor(sourceCell / GRID_SIZE);
-        const sourceColumn = sourceCell % GRID_SIZE;
-        const targetCharacterCanMove = !targetCharacter
-            || this.canPlaceCharacter(targetCharacter.type, sourceRow, sourceColumn, ignoredCells);
-
-        return movingCharacterCanMove && targetCharacterCanMove;
+    private canAttemptReposition(sourceCell: number, targetCell: number): boolean {
+        return !this.playerState.isDefeated()
+            && this.playerState.hasRepositionCredit()
+            && canMoveOrSwap(this.boardState.getCells(), sourceCell, targetCell);
     }
 
-    private createRepositionInterface() {
-        const panelX = 118;
-        const panelY = 46;
+    private handleRepositionRequest() {
+        if (this.playerState.isDefeated()) {
+            return;
+        }
 
-        this.add.rectangle(panelX, panelY, 204, 74, COLORS.repositionPanel);
-        this.repositionText = this.add.text(panelX, panelY - 17, '', {
-            fontFamily: 'Arial',
-            fontSize: 15,
-            color: '#ffffff'
-        }).setOrigin(0.5);
-        this.repositionButton = this.add.rectangle(panelX, panelY + 16, 158, 25, COLORS.unitCard)
-            .setInteractive({ useHandCursor: true });
-        this.repositionButtonText = this.add.text(panelX, panelY + 16, '', {
-            fontFamily: 'Arial Black',
-            fontSize: 13,
-            color: '#ffffff'
-        }).setOrigin(0.5);
-
-        this.repositionButton.on('pointerdown', () => {
-            if (this.isRepositionMode) {
-                this.isRepositionMode = false;
-                this.repositionSourceCell = undefined;
-            } else if (this.repositionments > 0) {
-                this.isRepositionMode = true;
-                this.repositionSourceCell = undefined;
-            }
-
-            this.updateRepositionInterface();
-        });
+        if (this.isRepositionMode) {
+            this.isRepositionMode = false;
+            this.repositionSourceCell = undefined;
+        } else if (this.playerState.hasRepositionCredit()) {
+            this.isRepositionMode = true;
+            this.repositionSourceCell = undefined;
+        }
 
         this.updateRepositionInterface();
     }
 
     private updateRepositionInterface() {
-        this.repositionText?.setText(`Reposicionamentos: ${this.repositionments}`);
-        this.repositionButton?.setFillStyle(this.isRepositionMode ? COLORS.repositionActive : COLORS.unitCard);
-        this.repositionButtonText?.setText(this.isRepositionMode ? 'Cancelar reposicionamento' : 'Reposicionar');
+        this.gameUI.updateRepositionCredits(this.playerState.getRepositionCredits(), this.isRepositionMode);
     }
 
-    private createBossInterface() {
-        const panelX = this.scale.width / 2;
-        const panelY = 46;
-        const hpBarX = panelX - 28;
-        const hpBarY = panelY + 22;
-        const hpBarWidth = 190;
+    private increaseDragonFury() {
+        if (this.playerState.isDefeated()) {
+            return;
+        }
 
-        this.add.rectangle(panelX, panelY, 360, 74, COLORS.bossPanel);
-        this.bossAvatar = this.add.circle(panelX - 140, panelY, 22, COLORS.bossHp);
-        this.add.text(panelX - 140, panelY, 'D', {
-            fontFamily: 'Arial Black',
-            fontSize: 24,
-            color: '#ffffff'
-        }).setOrigin(0.5);
-        this.add.text(panelX - 105, panelY - 17, this.boss.name, {
-            fontFamily: 'Arial Black',
-            fontSize: 20,
-            color: '#ffffff'
-        });
-        this.bossHpText = this.add.text(panelX - 105, panelY + 5, '', {
-            fontFamily: 'Arial',
-            fontSize: 16,
-            color: '#ffffff'
-        });
-        this.add.rectangle(hpBarX, hpBarY, hpBarWidth, 10, COLORS.bossHpBackground).setOrigin(0, 0.5);
-        this.bossHpBar = this.add.rectangle(hpBarX, hpBarY, hpBarWidth, 10, COLORS.bossHp).setOrigin(0, 0.5);
+        const result = this.combatManager.increaseDragonFury();
+        this.updateFuryInterface(result.furyAfterIncrease);
+        this.playFuryGainEffect(result.furyAfterIncrease);
 
-        this.updateBossInterface();
+        if (result.heroDamage > 0) {
+            this.performDragonAttack(result.heroDamage);
+        }
+    }
+
+    private performDragonAttack(damage: number) {
+        if (this.playerState.isDefeated()) {
+            return;
+        }
+
+        this.damageHero(damage);
+        this.updateFuryInterface();
+        this.playDragonAttackEffect(damage);
+    }
+
+    private damageHero(amount: number) {
+        this.playerState.damage(amount);
+        this.updateHeroInterface();
+        this.playHeroDamageEffect();
+        this.checkDefeat();
+    }
+
+    private checkDefeat() {
+        if (!this.playerState.isDefeated()) {
+            return;
+        }
+
+        this.isRepositionMode = false;
+        this.repositionSourceCell = undefined;
+        this.draggedPiece = undefined;
+        this.dragHighlight?.setVisible(false);
+        this.cardDragText?.destroy();
+        this.cardDragText = undefined;
+        this.updateRepositionInterface();
+        this.time.delayedCall(650, () => this.gameUI.showDefeat(() => this.scene.restart()));
+    }
+
+    private updateHeroInterface() {
+        const currentHp = this.playerState.getCurrentHp();
+        const maxHp = this.playerState.getMaxHp();
+        this.gameUI.updateHeroHp(currentHp, maxHp);
+    }
+
+    private updateFuryInterface(displayedFury = this.combatManager.getDragonFury()) {
+        const maximumFury = this.combatManager.getDragonMaxFury();
+        this.gameUI.updateFury(displayedFury, maximumFury);
+    }
+
+    private playFuryGainEffect(furyAfterIncrease: number) {
+        const furyText = this.gameUI.getFuryText();
+
+        if (!furyText) {
+            return;
+        }
+
+        const isMaximum = furyAfterIncrease === this.combatManager.getDragonMaxFury();
+        this.tweens.add({
+            targets: furyText,
+            scaleX: isMaximum ? 1.35 : 1.12,
+            scaleY: isMaximum ? 1.35 : 1.12,
+            duration: isMaximum ? 140 : 90,
+            yoyo: true
+        });
+
+        if (isMaximum) {
+            const warning = this.add.text(this.scale.width / 2, 104, 'FÚRIA MÁXIMA!', {
+                fontFamily: 'Arial Black', fontSize: 28, color: '#ff6b4a', stroke: '#17191f', strokeThickness: 5
+            }).setOrigin(0.5).setDepth(100);
+            this.tweens.add({ targets: warning, y: 88, alpha: 0, duration: 600, onComplete: () => warning.destroy() });
+        }
+    }
+
+    private playDragonAttackEffect(amount: number) {
+        const dragonAvatar = this.gameUI.getDragonAvatar();
+        if (dragonAvatar) {
+            this.tweens.add({ targets: dragonAvatar, scaleX: 1.3, scaleY: 1.3, angle: 6, duration: 70, yoyo: true, repeat: 2 });
+        }
+
+        const attackText = this.add.text(this.scale.width / 2, this.scale.height / 2, `ATAQUE DO DRAGÃO\n-${amount} HP`, {
+            fontFamily: 'Arial Black', fontSize: 30, color: '#ff6b4a', align: 'center', stroke: '#17191f', strokeThickness: 6
+        }).setOrigin(0.5).setDepth(100);
+        this.tweens.add({ targets: attackText, y: attackText.y - 24, alpha: 0, duration: 700, onComplete: () => attackText.destroy() });
+    }
+
+    private playHeroDamageEffect() {
+        const heroPanel = this.gameUI.getHeroPanel();
+        if (!heroPanel) {
+            return;
+        }
+
+        this.tweens.add({ targets: heroPanel, x: heroPanel.x + 5, duration: 55, yoyo: true, repeat: 3 });
+        this.tweens.add({ targets: this.gameUI.getHeroHpVisuals(), alpha: 0.25, duration: 80, yoyo: true, repeat: 1 });
     }
 
     private handleRegionAttack(regionRow: number, regionColumn: number) {
-        // O ataque combina o dano-base da região com bônus das sinergias ativas.
-        const activeSynergies = this.calculateRegionSynergies(regionRow, regionColumn);
-        const synergyBonus = activeSynergies.reduce((total, synergy) => total + synergy.bonusDamage, 0);
+        if (this.playerState.isDefeated()) {
+            return;
+        }
 
-        this.damageBoss(REGION_COMPLETION_DAMAGE + synergyBonus);
+        // O ataque combina o dano-base da região com bônus das sinergias ativas.
+        const activeSynergies = getFormedSynergiesInRegion(this.boardState.getCells(), regionRow, regionColumn)
+            .map((formedSynergy) => formedSynergy.definition);
+        const synergyBonus = activeSynergies.reduce((total, synergy) => total + synergy.bonusDamage, 0);
+        const damage = this.combatManager.attackDragonFromRegion(synergyBonus);
+
+        this.recordBossDamage(damage);
+        this.updateBossInterface();
+        this.showBossDamageFeedback(damage);
+        this.playBossHitEffect();
         this.applySynergyRewards(activeSynergies);
         activeSynergies.forEach((synergy, index) => this.playSynergyActivation(synergy, regionRow, regionColumn, index * 160));
     }
 
-    private applySynergyRewards(synergies: RegionSynergy[]) {
+    private applySynergyRewards(synergies: SynergyDefinition[]) {
         const repositionmentsEarned = synergies.reduce((total, synergy) => total + synergy.repositionments, 0);
+        const healingEarned = synergies.reduce((total, synergy) => total + synergy.healing, 0);
 
         if (repositionmentsEarned > 0) {
-            this.repositionments += repositionmentsEarned;
+            this.playerState.addRepositionCredits(repositionmentsEarned);
             this.updateRepositionInterface();
+        }
+
+        if (healingEarned > 0) {
+            this.healHero(healingEarned);
         }
     }
 
-    private damageBoss(amount: number) {
-        this.boss.currentHp = Math.max(0, this.boss.currentHp - amount);
-        this.recordBossDamage(amount);
-        this.updateBossInterface();
-        this.showBossDamageFeedback(amount);
-        this.playBossHitEffect();
-    }
-
-    private createDamageHistory(boardX: number, boardY: number) {
-        const panelX = boardX + BOARD_SIZE + 104;
-        const panelY = boardY + BOARD_SIZE / 2;
-
-        this.add.rectangle(panelX, panelY, 192, 220, COLORS.unitArea);
-        this.add.text(panelX, panelY - 88, 'Histórico de dano', {
-            fontFamily: 'Arial Black',
-            fontSize: 15,
-            color: '#ffffff'
-        }).setOrigin(0.5);
-        this.damageHistoryText = this.add.text(panelX - 78, panelY - 62, 'Nenhum dano causado.', {
-            fontFamily: 'Arial',
-            fontSize: 14,
-            color: '#ffffff',
-            lineSpacing: 6
-        });
+    private healHero(amount: number) {
+        this.playerState.heal(amount);
+        this.updateHeroInterface();
     }
 
     private recordBossDamage(amount: number) {
         this.damageHistory.push(amount);
-
-        const history = this.damageHistory
-            .map((damage, index) => `${index + 1}. -${damage} dano`)
-            .join('\n');
-
-        this.damageHistoryText?.setText(history);
+        this.gameUI.updateDamageHistory(this.damageHistory);
     }
 
     private updateBossInterface() {
-        const hpPercentage = this.boss.currentHp / this.boss.maxHp;
-
-        this.bossHpText?.setText(`HP: ${this.boss.currentHp} / ${this.boss.maxHp}`);
-        this.bossHpBar?.setDisplaySize(190 * hpPercentage, 10);
+        const currentHp = this.combatManager.getDragonCurrentHp();
+        const maxHp = this.combatManager.getDragonMaxHp();
+        this.gameUI.updateDragonHp(currentHp, maxHp);
     }
 
     private showBossDamageFeedback(amount: number) {
@@ -704,22 +684,24 @@ export class Game extends Scene {
     }
 
     private playBossHitEffect() {
-        if (!this.bossAvatar) {
+        const dragonAvatar = this.gameUI.getDragonAvatar();
+        if (!dragonAvatar) {
             return;
         }
 
         this.tweens.add({
-            targets: this.bossAvatar,
-            x: this.bossAvatar.x + 5,
+            targets: dragonAvatar,
+            x: dragonAvatar.x + 5,
             duration: 70,
             yoyo: true,
             repeat: 2
         });
     }
 
-    private playSynergyActivation(synergy: RegionSynergy, regionRow: number, regionColumn: number, delay: number) {
+    private playSynergyActivation(synergy: SynergyDefinition, regionRow: number, regionColumn: number, delay: number) {
         this.time.delayedCall(delay, () => {
-            const pair = this.findSynergyPairs(synergy, regionRow, regionColumn)[0];
+            const pair = getFormedSynergiesInRegion(this.boardState.getCells(), regionRow, regionColumn)
+                .find((formedSynergy) => formedSynergy.definition.id === synergy.id)?.pair;
 
             if (!pair) {
                 return;
@@ -727,17 +709,19 @@ export class Game extends Scene {
 
             if (synergy.id === 'arcane-arrow') {
                 this.playArcaneArrowEffect(pair);
-            } else {
+            } else if (synergy.id === 'tactical-maneuver') {
                 this.playTacticalManeuverEffect(pair);
+            } else {
+                this.playNaturesBlessingEffect(pair);
             }
 
             this.showSynergyFeedback(synergy);
         });
     }
 
-    private playArcaneArrowEffect(pair: [number, number]) {
-        const mage = this.placedCharacters.get(pair[0]);
-        const archer = this.placedCharacters.get(pair[1]);
+    private playArcaneArrowEffect(pair: readonly [number, number]) {
+        const mage = this.pieceVisuals.get(pair[0]);
+        const archer = this.pieceVisuals.get(pair[1]);
 
         if (!mage || !archer) {
             return;
@@ -754,9 +738,9 @@ export class Game extends Scene {
         this.fadeAndDestroy(effect, 520);
     }
 
-    private playTacticalManeuverEffect(pair: [number, number]) {
-        const paladin = this.placedCharacters.get(pair[0]);
-        const barbarian = this.placedCharacters.get(pair[1]);
+    private playTacticalManeuverEffect(pair: readonly [number, number]) {
+        const paladin = this.pieceVisuals.get(pair[0]);
+        const barbarian = this.pieceVisuals.get(pair[1]);
 
         if (!paladin || !barbarian) {
             return;
@@ -772,13 +756,37 @@ export class Game extends Scene {
         this.playResourceGainEffect();
     }
 
+    private playNaturesBlessingEffect(pair: readonly [number, number]) {
+        const cleric = this.pieceVisuals.get(pair[0]);
+        const druid = this.pieceVisuals.get(pair[1]);
+
+        if (!cleric || !druid) {
+            return;
+        }
+
+        this.tweens.add({ targets: cleric.circle, scaleX: 1.3, scaleY: 1.3, duration: 120, yoyo: true });
+        this.tweens.add({ targets: druid.circle, scaleX: 1.3, scaleY: 1.3, duration: 120, delay: 120, yoyo: true });
+        const effect = this.add.graphics();
+        effect.lineStyle(5, 0x63d69b, 0.95);
+        effect.lineBetween(cleric.circle.x, cleric.circle.y, druid.circle.x, druid.circle.y);
+        effect.strokeCircle(cleric.circle.x, cleric.circle.y, 29);
+        effect.strokeCircle(druid.circle.x, druid.circle.y, 29);
+        this.fadeAndDestroy(effect, 520);
+
+        const heroPanel = this.gameUI.getHeroPanel();
+        if (heroPanel) {
+            this.tweens.add({ targets: [heroPanel, ...this.gameUI.getHeroHpVisuals()], alpha: 0.55, duration: 110, yoyo: true, repeat: 1 });
+        }
+    }
+
     private playResourceGainEffect() {
-        if (!this.repositionText) {
+        const repositionText = this.gameUI.getRepositionText();
+        if (!repositionText) {
             return;
         }
 
         this.tweens.add({
-            targets: this.repositionText,
+            targets: repositionText,
             scaleX: 1.2,
             scaleY: 1.2,
             duration: 130,
@@ -795,14 +803,18 @@ export class Game extends Scene {
         });
     }
 
-    private showSynergyFeedback(synergy: RegionSynergy) {
+    private showSynergyFeedback(synergy: SynergyDefinition) {
         const panelX = this.scale.width / 2;
         const panelY = 46;
-        const arcanePulse = this.add.circle(panelX - 140, panelY, 20, 0x8f71ff, 0.7);
+        const isNatureBlessing = synergy.id === 'natures-blessing';
+        const feedbackColor = isNatureBlessing ? 0x63d69b : 0x8f71ff;
+        const feedbackTextColor = isNatureBlessing ? '#63d69b' : '#bca8ff';
+        const feedbackX = isNatureBlessing ? this.scale.width - 118 : panelX - 140;
+        const arcanePulse = this.add.circle(feedbackX, panelY, 20, feedbackColor, 0.7);
         const synergyText = this.add.text(panelX + 200, panelY, `${synergy.name.toUpperCase()}\n${synergy.feedbackText}`, {
             fontFamily: 'Arial Black',
             fontSize: 14,
-            color: '#bca8ff',
+            color: feedbackTextColor,
             align: 'center'
         }).setOrigin(0.5);
 
@@ -823,51 +835,6 @@ export class Game extends Scene {
         });
     }
 
-    private canPlaceCharacter(characterType: string, row: number, column: number, ignoredCellIndices = new Set<number>()): boolean {
-        const targetRegion = this.getRegionIndex(row, column);
-
-        // Regra principal do Sudoku: uma classe não pode se repetir na mesma linha,
-        // coluna ou região 3x3.
-        for (const [cellIndex, placedCharacter] of this.placedCharacters) {
-            if (ignoredCellIndices.has(cellIndex) || placedCharacter.type !== characterType) {
-                continue;
-            }
-
-            const placedRow = Math.floor(cellIndex / GRID_SIZE);
-            const placedColumn = cellIndex % GRID_SIZE;
-            const placedRegion = this.getRegionIndex(placedRow, placedColumn);
-
-            if (placedRow === row || placedColumn === column || placedRegion === targetRegion) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private isRegionComplete(regionRow: number, regionColumn: number): boolean {
-        const characterTypesInRegion = new Set<string>();
-        const firstRow = regionRow * REGION_SIZE;
-        const firstColumn = regionColumn * REGION_SIZE;
-
-        for (let row = firstRow; row < firstRow + REGION_SIZE; row++) {
-            for (let column = firstColumn; column < firstColumn + REGION_SIZE; column++) {
-                const cellIndex = row * GRID_SIZE + column;
-                const placedCharacter = this.placedCharacters.get(cellIndex);
-
-                if (!placedCharacter) {
-                    return false;
-                }
-
-                characterTypesInRegion.add(placedCharacter.type);
-            }
-        }
-
-        // A região só é completa quando contém uma unidade de cada uma das nove classes.
-        return characterTypesInRegion.size === CHARACTER_TYPES.length
-            && CHARACTER_TYPES.every((character) => characterTypesInRegion.has(character.id));
-    }
-
     private refreshSynergyIndicators() {
         // Recria as conexões depois de cada movimento para que nenhuma linha visual
         // continue apontando para a posição antiga de uma peça.
@@ -877,54 +844,23 @@ export class Game extends Scene {
         });
         this.synergyConnectionGraphics = [];
 
-        REGION_SYNERGIES.forEach((synergy) => {
-            this.findSynergyPairs(synergy).forEach((pair) => this.showSynergyConnection(synergy, pair));
+        getAllFormedSynergies(this.boardState.getCells()).forEach((formedSynergy) => {
+            this.showSynergyConnection(formedSynergy.definition, formedSynergy.pair);
         });
     }
 
-    private findSynergyPairs(synergy: RegionSynergy, regionRow?: number, regionColumn?: number): [number, number][] {
-        const pairs: [number, number][] = [];
-        const [firstType, secondType] = synergy.characterTypes;
-
-        for (const [cellIndex, character] of this.placedCharacters) {
-            const row = Math.floor(cellIndex / GRID_SIZE);
-            const column = cellIndex % GRID_SIZE;
-
-            if (character.type !== firstType
-                || (regionRow !== undefined && (Math.floor(row / REGION_SIZE) !== regionRow || Math.floor(column / REGION_SIZE) !== regionColumn))) {
-                continue;
-            }
-
-            const adjacentCells = [
-                { row: row - 1, column },
-                { row: row + 1, column },
-                { row, column: column - 1 },
-                { row, column: column + 1 }
-            ];
-
-            for (const adjacent of adjacentCells) {
-                const adjacentCharacter = this.placedCharacters.get(adjacent.row * GRID_SIZE + adjacent.column);
-
-                if (adjacent.row >= 0 && adjacent.row < GRID_SIZE && adjacent.column >= 0 && adjacent.column < GRID_SIZE
-                    && adjacentCharacter?.type === secondType) {
-                    pairs.push([cellIndex, adjacent.row * GRID_SIZE + adjacent.column]);
-                }
-            }
-        }
-
-        return pairs;
-    }
-
-    private showSynergyConnection(synergy: RegionSynergy, pair: [number, number]) {
-        const firstCharacter = this.placedCharacters.get(pair[0]);
-        const secondCharacter = this.placedCharacters.get(pair[1]);
+    private showSynergyConnection(synergy: SynergyDefinition, pair: readonly [number, number]) {
+        const firstCharacter = this.pieceVisuals.get(pair[0]);
+        const secondCharacter = this.pieceVisuals.get(pair[1]);
 
         if (!firstCharacter || !secondCharacter) {
             return;
         }
 
         const graphics = this.add.graphics().setDepth(20);
-        const color = synergy.id === 'arcane-arrow' ? 0x9d81ff : 0xf0b429;
+        const color = synergy.id === 'arcane-arrow'
+            ? 0x9d81ff
+            : synergy.id === 'natures-blessing' ? 0x63d69b : 0xf0b429;
         const lineWidth = synergy.id === 'arcane-arrow' ? 2 : 3;
         graphics.lineStyle(lineWidth, color, 0.6);
         graphics.lineBetween(firstCharacter.circle.x, firstCharacter.circle.y, secondCharacter.circle.x, secondCharacter.circle.y);
@@ -936,48 +872,24 @@ export class Game extends Scene {
         this.tweens.add({ targets: graphics, alpha: 0.45, duration: 260, yoyo: true });
     }
 
-    private calculateRegionSynergies(regionRow: number, regionColumn: number): RegionSynergy[] {
-        const characters: RegionCharacter[] = [];
-        const firstRow = regionRow * REGION_SIZE;
-        const firstColumn = regionColumn * REGION_SIZE;
-
-        for (let row = firstRow; row < firstRow + REGION_SIZE; row++) {
-            for (let column = firstColumn; column < firstColumn + REGION_SIZE; column++) {
-                const placedCharacter = this.placedCharacters.get(row * GRID_SIZE + column);
-
-                if (placedCharacter) {
-                    characters.push({ type: placedCharacter.type, row, column });
-                }
-            }
-        }
-
-        return REGION_SYNERGIES.filter((synergy) => synergy.isActive(characters));
-    }
-
     private updateRegionState(row: number, column: number, boardX: number, boardY: number) {
         const regionRow = Math.floor(row / REGION_SIZE);
         const regionColumn = Math.floor(column / REGION_SIZE);
-        const regionIndex = this.getRegionIndex(row, column);
-        const regionState = this.getRegionState(regionIndex);
-
-        regionState.isCurrentlyComplete = this.isRegionComplete(regionRow, regionColumn);
+        const regionIndex = getRegionIndex(row, column);
+        const regionIsComplete = isRegionComplete(
+            this.boardState.getCells(),
+            regionRow,
+            regionColumn,
+            CHARACTER_TYPES.map((character) => character.id)
+        );
+        this.boardState.setRegionComplete(regionIndex, regionIsComplete);
+        const regionState = this.boardState.getRegionState(regionIndex);
 
         // Uma região ataca apenas uma vez, mesmo se for desfeita e completada novamente.
         if (regionState.isCurrentlyComplete && !regionState.hasAttacked) {
-            regionState.hasAttacked = true;
+            this.boardState.markRegionAttacked(regionIndex);
             this.handleRegionCompleted(regionRow, regionColumn, boardX, boardY);
         }
-    }
-
-    private getRegionState(regionIndex: number): RegionState {
-        let regionState = this.regionStates.get(regionIndex);
-
-        if (!regionState) {
-            regionState = { isCurrentlyComplete: false, hasAttacked: false };
-            this.regionStates.set(regionIndex, regionState);
-        }
-
-        return regionState;
     }
 
     private handleRegionCompleted(regionRow: number, regionColumn: number, boardX: number, boardY: number) {
@@ -999,7 +911,4 @@ export class Game extends Scene {
         this.events.emit('region-completed', regionRow, regionColumn);
     }
 
-    private getRegionIndex(row: number, column: number): number {
-        return Math.floor(row / REGION_SIZE) * REGION_SIZE + Math.floor(column / REGION_SIZE);
-    }
 }
