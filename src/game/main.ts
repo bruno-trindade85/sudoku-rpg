@@ -10,6 +10,7 @@ const config: Types.Core.GameConfig = {
     parent: 'game-container',
     backgroundColor: '#17191f',
     scale: {
+        // Mantém a proporção do jogo e centraliza o canvas quando a janela muda de tamanho.
         mode: Scale.FIT,
         autoCenter: Scale.CENTER_BOTH
     },
@@ -19,6 +20,7 @@ const config: Types.Core.GameConfig = {
 };
 
 const StartGame = (parent: string) => {
+    // O parent recebido permite montar o jogo em qualquer contêiner da página.
     return new Game({ ...config, parent });
 }
 

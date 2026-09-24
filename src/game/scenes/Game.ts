@@ -1,11 +1,16 @@
 import { Scene } from 'phaser';
 
+// O tabuleiro segue a estrutura do Sudoku: 9x9, dividido em regiões 3x3.
+// Cada classe de personagem representa um dos nove valores possíveis.
 const GRID_SIZE = 9;
 const REGION_SIZE = 3;
 const CELL_SIZE = 64;
+// Tamanho total do tabuleiro em pixels.
 const BOARD_SIZE = GRID_SIZE * CELL_SIZE;
+// Dano-base causado quando o jogador completa uma região 3x3.
 const REGION_COMPLETION_DAMAGE = 50;
 
+// Dados visuais e identificador de uma classe disponível para colocação.
 type CharacterType = {
     id: string;
     name: string;
@@ -70,6 +75,8 @@ const REGION_SYNERGIES: RegionSynergy[] = [
             const mage = characters.find((character) => character.type === 'mage');
             const archer = characters.find((character) => character.type === 'archer');
 
+            // Distância de Manhattan igual a 1 significa que as peças são vizinhas
+            // na horizontal ou vertical; diagonais não ativam a sinergia.
             return Boolean(mage && archer
                 && Math.abs(mage.row - archer.row) + Math.abs(mage.column - archer.column) === 1);
         }
@@ -140,6 +147,7 @@ export class Game extends Scene {
     }
 
     create() {
+        // Centraliza o tabuleiro no canvas do Phaser.
         const boardX = (this.scale.width - BOARD_SIZE) / 2;
         const boardY = (this.scale.height - BOARD_SIZE) / 2;
         this.boardX = boardX;
@@ -161,6 +169,8 @@ export class Game extends Scene {
             this.showInvalidCell(x, y);
         };
 
+        // A cena pode ser reiniciada; por isso o estado da partida é zerado antes
+        // de recriar os elementos visuais e os eventos.
         this.placedCharacters.clear();
         this.regionStates.clear();
         this.boss.currentHp = this.boss.maxHp;
@@ -179,6 +189,7 @@ export class Game extends Scene {
         graphics.fillStyle(COLORS.board);
         graphics.fillRect(boardX, boardY, BOARD_SIZE, BOARD_SIZE);
 
+        // Linhas mais grossas marcam os limites das nove regiões 3x3.
         for (let index = 0; index <= GRID_SIZE; index++) {
             const isRegionBoundary = index % REGION_SIZE === 0;
             const lineWidth = isRegionBoundary ? 5 : 2;
@@ -329,6 +340,7 @@ export class Game extends Scene {
             return false;
         }
 
+        // Se o destino estiver ocupado, as duas peças trocam de posição.
         this.placedCharacters.set(targetCell, movingCharacter);
 
         if (targetCharacter) {
@@ -407,6 +419,7 @@ export class Game extends Scene {
     }
 
     private showInvalidCell(x: number, y: number) {
+        // A versão evita que o timer de um aviso antigo esconda um aviso mais recente.
         const feedbackVersion = ++this.invalidHighlightVersion;
         this.invalidHighlight?.setPosition(x, y).setVisible(true);
         this.time.delayedCall(350, () => {
@@ -520,6 +533,8 @@ export class Game extends Scene {
             return false;
         }
 
+        // Ignora origem e destino durante a simulação da troca, pois seus conteúdos
+        // serão removidos ou substituídos pelo movimento.
         const ignoredCells = new Set([sourceCell, targetCell]);
         const movingCharacterCanMove = this.canPlaceCharacter(movingCharacter.type, targetRow, targetColumn, ignoredCells);
         const sourceRow = Math.floor(sourceCell / GRID_SIZE);
@@ -600,6 +615,7 @@ export class Game extends Scene {
     }
 
     private handleRegionAttack(regionRow: number, regionColumn: number) {
+        // O ataque combina o dano-base da região com bônus das sinergias ativas.
         const activeSynergies = this.calculateRegionSynergies(regionRow, regionColumn);
         const synergyBonus = activeSynergies.reduce((total, synergy) => total + synergy.bonusDamage, 0);
 
@@ -810,6 +826,8 @@ export class Game extends Scene {
     private canPlaceCharacter(characterType: string, row: number, column: number, ignoredCellIndices = new Set<number>()): boolean {
         const targetRegion = this.getRegionIndex(row, column);
 
+        // Regra principal do Sudoku: uma classe não pode se repetir na mesma linha,
+        // coluna ou região 3x3.
         for (const [cellIndex, placedCharacter] of this.placedCharacters) {
             if (ignoredCellIndices.has(cellIndex) || placedCharacter.type !== characterType) {
                 continue;
@@ -845,11 +863,14 @@ export class Game extends Scene {
             }
         }
 
+        // A região só é completa quando contém uma unidade de cada uma das nove classes.
         return characterTypesInRegion.size === CHARACTER_TYPES.length
             && CHARACTER_TYPES.every((character) => characterTypesInRegion.has(character.id));
     }
 
     private refreshSynergyIndicators() {
+        // Recria as conexões depois de cada movimento para que nenhuma linha visual
+        // continue apontando para a posição antiga de uma peça.
         this.synergyConnectionGraphics.forEach((graphics) => {
             this.tweens.killTweensOf(graphics);
             graphics.destroy();
@@ -941,6 +962,7 @@ export class Game extends Scene {
 
         regionState.isCurrentlyComplete = this.isRegionComplete(regionRow, regionColumn);
 
+        // Uma região ataca apenas uma vez, mesmo se for desfeita e completada novamente.
         if (regionState.isCurrentlyComplete && !regionState.hasAttacked) {
             regionState.hasAttacked = true;
             this.handleRegionCompleted(regionRow, regionColumn, boardX, boardY);
