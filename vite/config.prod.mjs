@@ -17,7 +17,7 @@ const phasermsg = () => {
 }   
 
 export default defineConfig({
-    base: './',
+    base: '/sudoku-rpg/',
     logLevel: 'warning',
     build: {
         rollupOptions: {
