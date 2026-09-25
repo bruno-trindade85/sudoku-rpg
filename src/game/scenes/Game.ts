@@ -218,18 +218,15 @@ export class Game extends Scene {
             const cardY = cardsRowY;
             const cardBackground = this.add.rectangle(0, 0, UNIT_CARD_WIDTH, UNIT_CARD_HEIGHT, COLORS.unitCard, 0.92)
                 .setStrokeStyle(2, character.color, 0.85);
-            const cardAccent = this.add.circle(0, UNIT_CARD_HEIGHT / 2 - 9, 4, character.color);
-            const symbol = this.add.text(0, -12, character.symbol, {
-                fontFamily: 'Arial Black',
-                fontSize: 34,
-                color: '#ffffff'
-            }).setOrigin(0.5);
-            const name = this.add.text(0, 26, character.name.toUpperCase(), {
+            const unitSprite = this.add.image(0, -12, UNIT_TEXTURES[character.id])
+                .setScale(UNIT_SPRITE_SCALE)
+                .setFlipX(UNIT_SPRITE_FLIP_X[character.id]);
+            const name = this.add.text(0, 29, character.name.toUpperCase(), {
                 fontFamily: 'Arial Black',
                 fontSize: character.name.length > 12 ? 10 : 12,
                 color: '#ffffff'
             }).setOrigin(0.5);
-            const card = this.add.container(cardX, cardY, [cardBackground, cardAccent, symbol, name])
+            const card = this.add.container(cardX, cardY, [cardBackground, unitSprite, name])
                 .setSize(UNIT_CARD_WIDTH, UNIT_CARD_HEIGHT)
                 .setInteractive({ useHandCursor: true });
             this.input.setDraggable(card);
