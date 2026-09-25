@@ -34,7 +34,7 @@ export type CombatHistoryEvent =
 export class GameUI {
     private dragonHpText?: Phaser.GameObjects.Text;
     private dragonHpBar?: Phaser.GameObjects.Rectangle;
-    private dragonAvatar?: Phaser.GameObjects.Image;
+    private dragonAvatar?: Phaser.GameObjects.Sprite;
     private heroHpText?: Phaser.GameObjects.Text;
     private heroHpBar?: Phaser.GameObjects.Rectangle;
     private heroPanel?: Phaser.GameObjects.Rectangle;
@@ -118,7 +118,7 @@ export class GameUI {
         button.on('pointerdown', onRestart);
     }
 
-    getDragonAvatar(): Phaser.GameObjects.Image | undefined {
+    getDragonAvatar(): Phaser.GameObjects.Sprite | undefined {
         return this.dragonAvatar;
     }
 
