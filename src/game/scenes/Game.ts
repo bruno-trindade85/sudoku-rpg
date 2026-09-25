@@ -366,6 +366,8 @@ export class Game extends Scene {
         const sprite = this.add.image(x, y, UNIT_TEXTURES[character.id])
             .setScale(UNIT_SPRITE_SCALE)
             .setFlipX(UNIT_SPRITE_FLIP_X[character.id])
+            // Mantém as unidades acima do tabuleiro e dos realces de chão.
+            .setDepth(10)
             .setInteractive({ useHandCursor: true });
         const placedCharacter = { type: character.id, sprite };
 
