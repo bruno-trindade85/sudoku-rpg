@@ -459,7 +459,7 @@ export class Game extends Scene {
             }
 
             this.tweens.killTweensOf(placedCharacter.sprite);
-            placedCharacter.sprite.setAlpha(1);
+            placedCharacter.sprite.setVisible(true).setAlpha(1).setDepth(10);
             this.tweens.add({
                 targets: placedCharacter.sprite,
                 alpha: 0.25,
@@ -534,6 +534,10 @@ export class Game extends Scene {
     }
 
     private startPieceDrag(piece: PlacedCharacter) {
+        // Arrastar uma peça também encerra qualquer destaque iniciado pelo long press.
+        // Isso impede que um tween infinito de alpha deixe a sprite invisível.
+        this.cancelCardHoldHighlight();
+
         if (this.playerState.isDefeated()) {
             return;
         }
