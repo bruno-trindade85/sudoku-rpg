@@ -151,9 +151,19 @@ export class GameUI {
         const hpBarX = panelX - 95;
         const hpBarY = panelY + 126;
 
-        this.dragonAvatar = this.scene.add.image(panelX, panelY, 'dragon')
-            .setScale(2)
+        if (!this.scene.anims.exists('dragon-idle')) {
+            this.scene.anims.create({
+                key: 'dragon-idle',
+                frames: this.scene.anims.generateFrameNumbers('dragon-idle-right', { start: 0, end: 19 }),
+                frameRate: 10,
+                repeat: -1
+            });
+        }
+
+        this.dragonAvatar = this.scene.add.sprite(panelX, panelY, 'dragon-idle-right', 0)
+            .setScale(1.6)
             .setFlipX(true);
+        this.dragonAvatar.play('dragon-idle');
         this.furyText = this.scene.add.text(panelX, panelY - 88, '', {
             fontFamily: 'Arial Black', fontSize: 20, color: '#f0b429', stroke: '#17191f', strokeThickness: 3
         }).setOrigin(0.5);
