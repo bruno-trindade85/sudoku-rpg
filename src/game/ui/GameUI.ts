@@ -13,16 +13,16 @@ const COLORS = {
 };
 
 const HUD_LAYOUT = {
-    panelX: 118,
-    panelY: 168,
-    panelWidth: 204,
-    panelHeight: 318,
-    repositionPanelX: 118,
-    repositionPanelY: 112,
-    damageHistoryX: 118,
-    damageHistoryY: 222,
-    heroPanelX: 118,
-    heroPanelY: 52,
+    panelX: 135,
+    panelY: 190,
+    panelWidth: 238,
+    panelHeight: 360,
+    repositionPanelX: 135,
+    repositionPanelY: 124,
+    damageHistoryX: 135,
+    damageHistoryY: 248,
+    heroPanelX: 135,
+    heroPanelY: 58,
     dragonOffsetFromBoard: 145
 };
 
@@ -66,7 +66,7 @@ export class GameUI {
     updateHeroHp(currentHp: number, maxHp: number): void {
         const hpPercentage = currentHp / maxHp;
         this.heroHpText?.setText(`${currentHp} / ${maxHp} HP`);
-        this.heroHpBar?.setDisplaySize(156 * hpPercentage, 10);
+        this.heroHpBar?.setDisplaySize(188 * hpPercentage, 10);
     }
 
     updateFury(currentFury: number, maximumFury: number): void {
@@ -87,8 +87,8 @@ export class GameUI {
 
         const recentEvents = combatHistory.slice(-5);
         if (recentEvents.length === 0) {
-            this.combatHistoryTexts.push(this.scene.add.text(HUD_LAYOUT.damageHistoryX - 78, HUD_LAYOUT.damageHistoryY - 50, 'Nenhum evento.', {
-                fontFamily: 'Arial', fontSize: 17, color: '#ffffff'
+            this.combatHistoryTexts.push(this.scene.add.text(HUD_LAYOUT.damageHistoryX - 94, HUD_LAYOUT.damageHistoryY - 50, 'Nenhum evento.', {
+                fontFamily: 'Arial', fontSize: 18, color: '#ffffff'
             }));
             return;
         }
@@ -179,25 +179,25 @@ export class GameUI {
     }
 
     private createHeroInterface(panelX: number, panelY: number): void {
-        const hpBarX = panelX - 78;
+        const hpBarX = panelX - 94;
         const hpBarY = panelY + 19;
 
         // Referência invisível mantida para os efeitos que usam a posição do painel do herói.
         this.heroPanel = this.scene.add.rectangle(panelX, panelY, 1, 1, COLORS.heroPanel, 0);
-        this.scene.add.text(panelX - 78, panelY - 23, 'HERÓI', {
-            fontFamily: 'Arial Black', fontSize: 17, color: '#ffffff'
+        this.scene.add.text(panelX - 94, panelY - 23, 'HERÓI', {
+            fontFamily: 'Arial Black', fontSize: 20, color: '#ffffff'
         });
-        this.heroHpText = this.scene.add.text(panelX + 78, panelY - 21, '', {
-            fontFamily: 'Arial', fontSize: 15, color: '#dfe6ee'
+        this.heroHpText = this.scene.add.text(panelX + 94, panelY - 21, '', {
+            fontFamily: 'Arial', fontSize: 17, color: '#ffffff'
         }).setOrigin(1, 0);
-        this.scene.add.rectangle(hpBarX, hpBarY, 156, 8, COLORS.hpBackground).setOrigin(0, 0.5);
-        this.heroHpBar = this.scene.add.rectangle(hpBarX, hpBarY, 156, 8, COLORS.heroHp).setOrigin(0, 0.5);
+        this.scene.add.rectangle(hpBarX, hpBarY, 188, 8, COLORS.hpBackground).setOrigin(0, 0.5);
+        this.heroHpBar = this.scene.add.rectangle(hpBarX, hpBarY, 188, 8, COLORS.heroHp).setOrigin(0, 0.5);
     }
 
     private createDamageHistory(panelX: number, panelY: number): void {
-        this.scene.add.rectangle(panelX, panelY - 82, 164, 1, 0x667080, 0.35);
-        this.scene.add.text(panelX - 78, panelY - 72, 'HISTÓRICO DE COMBATE', {
-            fontFamily: 'Arial Black', fontSize: 15, color: '#ffffff'
+        this.scene.add.rectangle(panelX, panelY - 88, 196, 1, 0x667080, 0.35);
+        this.scene.add.text(panelX - 94, panelY - 76, 'HISTÓRICO DE COMBATE', {
+            fontFamily: 'Arial Black', fontSize: 17, color: '#ffffff'
         });
     }
 
@@ -205,13 +205,13 @@ export class GameUI {
         const panelX = HUD_LAYOUT.repositionPanelX;
         const panelY = HUD_LAYOUT.repositionPanelY;
 
-        this.repositionText = this.scene.add.text(panelX - 78, panelY - 17, '', {
-            fontFamily: 'Arial', fontSize: 14, color: '#dfe6ee'
+        this.repositionText = this.scene.add.text(panelX - 94, panelY - 17, '', {
+            fontFamily: 'Arial', fontSize: 16, color: '#ffffff'
         });
-        this.repositionButton = this.scene.add.rectangle(panelX, panelY + 16, 158, 27, COLORS.button)
+        this.repositionButton = this.scene.add.rectangle(panelX, panelY + 18, 188, 31, COLORS.button)
             .setInteractive({ useHandCursor: true });
-        this.repositionButtonText = this.scene.add.text(panelX, panelY + 16, '', {
-            fontFamily: 'Arial Black', fontSize: 15, color: '#ffffff'
+        this.repositionButtonText = this.scene.add.text(panelX, panelY + 18, '', {
+            fontFamily: 'Arial Black', fontSize: 17, color: '#ffffff'
         }).setOrigin(0.5);
         this.repositionButton.on('pointerdown', onRepositionRequest);
     }
