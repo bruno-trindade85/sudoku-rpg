@@ -81,7 +81,10 @@ export class Game extends Scene {
         CHARACTER_TYPES.forEach((character) => {
             this.load.image(UNIT_TEXTURES[character.id], `assets/units/${UNIT_TEXTURES[character.id]}.png`);
         });
-        this.load.spritesheet('dragon-idle-right', 'assets/enemies/dragon/idle-right.png', {\n            frameWidth: 88,\n            frameHeight: 99\n        });
+        this.load.spritesheet('dragon-idle-right', 'assets/enemies/dragon/idle-right.png', {
+            frameWidth: 88,
+            frameHeight: 99
+        });
     }
 
     create() {
