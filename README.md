@@ -1,158 +1,567 @@
-# Phaser Vite TypeScript Template
+# Sudoku RPG — Game Design Document (GDD)
 
-This is a Phaser project template that uses Vite for bundling. It supports hot-reloading for quick development workflow, includes TypeScript support and scripts to generate production-ready builds.
+> **Status:** MVP em desenvolvimento  
+> **Gênero:** Puzzle / RPG / Estratégia / Roguelite  
+> **Plataforma inicial:** Web  
+> **Tecnologias:** Phaser + TypeScript
 
-**[This Template is also available as a JavaScript version.](https://github.com/phaserjs/template-vite)**
+---
 
-### Versions
+# 1. Visão Geral
 
-This template has been updated for:
+**Sudoku RPG** é um jogo que combina a lógica do Sudoku com combate RPG e elementos estratégicos.
 
-- [Phaser 4](https://github.com/phaserjs/phaser)
-- [Vite 6.3.1](https://github.com/vitejs/vite)
-- [TypeScript 5.7.2](https://github.com/microsoft/TypeScript)
+O campo de batalha utiliza uma grade **9×9**, seguindo as regras fundamentais de um Sudoku tradicional:
 
-![screenshot](screenshot.png)
+- Cada linha deve conter os 9 símbolos/classes sem repetição.
+- Cada coluna deve conter os 9 símbolos/classes sem repetição.
+- Cada bloco 3×3 deve conter os 9 símbolos/classes sem repetição.
 
-## Requirements
+Entretanto, no lugar dos números tradicionais de `1 a 9`, o jogador utiliza **personagens/classes de RPG**.
 
-[Node.js](https://nodejs.org) is required to install dependencies and run scripts via `npm`.
+Assim, resolver o Sudoku também representa posicionar unidades no campo de batalha.
 
-## Available Commands
+---
 
-| Command | Description |
-|---------|-------------|
-| `npm install` | Install project dependencies |
-| `npm run dev` | Launch a development web server |
-| `npm run build` | Create a production build in the `dist` folder |
-| `npm run dev-nolog` | Launch a development web server without sending anonymous data (see "About log.js" below) |
-| `npm run build-nolog` | Create a production build in the `dist` folder without sending anonymous data (see "About log.js" below) |
+# 2. Conceito Central
 
-## Writing Code
+Internamente, o jogo continua utilizando os valores:
 
-After cloning the repo, run `npm install` from your project directory. Then, you can start the local development server by running `npm run dev`.
-
-The local development server runs on `http://localhost:8080` by default. Please see the Vite documentation if you wish to change this, or add SSL support.
-
-Once the server is running you can edit any of the files in the `src` folder. Vite will automatically recompile your code and then reload the browser.
-
-## Template Project Structure
-
-We have provided a default project structure to get you started. This is as follows:
-
-## Template Project Structure
-
-We have provided a default project structure to get you started:
-
-| Path                         | Description                                                |
-|------------------------------|------------------------------------------------------------|
-| `index.html`                 | A basic HTML page to contain the game.                     |
-| `public/assets`              | Game sprites, audio, etc. Served directly at runtime.      |
-| `public/style.css`           | Global layout styles.                                      |
-| `src/main.ts`                | Application bootstrap.                                     |
-| `src/game`                   | Folder containing the game code.                           |
-| `src/game/main.ts`           | Game entry point: configures and starts the game.          |
-| `src/game/scenes`            | Folder with all Phaser game scenes.                        | 
-
-
-## Handling Assets
-
-Vite supports loading assets via JavaScript module `import` statements.
-
-This template provides support for both embedding assets and also loading them from a static folder. To embed an asset, you can import it at the top of the JavaScript file you are using it in:
-
-```js
-import logoImg from './assets/logo.png'
+```text
+1 2 3 4 5 6 7 8 9
 ```
 
-To load static files such as audio files, videos, etc place them into the `public/assets` folder. Then you can use this path in the Loader calls within Phaser:
+Porém, esses números não precisam ser apresentados ao jogador.
 
-```js
-preload ()
-{
-    //  This is an example of an imported bundled image.
-    //  Remember to import it at the top of this file
-    this.load.image('logo', logoImg);
+Cada número representa uma das nove classes/personagens disponíveis naquela partida.
 
-    //  This is an example of loading a static image
-    //  from the public/assets folder:
-    this.load.image('background', 'assets/bg.png');
-}
+Exemplo:
+
+```text
+1 → Guerreiro
+2 → Arqueiro
+3 → Mago
+4 → Clérigo
+5 → Ladino
+6 → Paladino
+7 → Druida
+8 → Bárbaro
+9 → Necromante
 ```
 
-When you issue the `npm run build` command, all static assets are automatically copied to the `dist/assets` folder.
+Essa associação é interna.
 
-## Deploying to Production
+Visualmente, o jogador interage com os personagens e não com os números.
 
-After you run the `npm run build` command, your code will be built into a single bundle and saved to the `dist` folder, along with any other assets your project imported, or stored in the public assets folder.
+---
 
-In order to deploy your game, you will need to upload *all* of the contents of the `dist` folder to a public facing web server.
+# 3. Aleatoriedade das Classes
 
-## Customizing the Template
+## 3.1 MVP
 
-### Vite
+Durante o MVP serão utilizadas sempre as mesmas **9 classes/personagens**.
 
-If you want to customize your build, such as adding plugin (i.e. for loading CSS or fonts), you can modify the `vite/config.*.mjs` file for cross-project changes, or you can modify and/or create new configuration files and target them in specific npm tasks inside of `package.json`. Please see the [Vite documentation](https://vitejs.dev/) for more information.
+Entretanto, a associação entre classe e número interno será embaralhada a cada nova partida.
 
-## About log.js
+### Partida A
 
-If you inspect our node scripts you will see there is a file called `log.js`. This file makes a single silent API call to a domain called `gryzor.co`. This domain is owned by Phaser Studio Inc. The domain name is a homage to one of our favorite retro games.
-
-We send the following 3 pieces of data to this API: The name of the template being used (vue, react, etc). If the build was 'dev' or 'prod' and finally the version of Phaser being used.
-
-At no point is any personal data collected or sent. We don't know about your project files, device, browser or anything else. Feel free to inspect the `log.js` file to confirm this.
-
-Why do we do this? Because being open source means we have no visible metrics about which of our templates are being used. We work hard to maintain a large and diverse set of templates for Phaser developers and this is our small anonymous way to determine if that work is actually paying off, or not. In short, it helps us ensure we're building the tools for you.
-
-However, if you don't want to send any data, you can use these commands instead:
-
-Dev:
-
-```bash
-npm run dev-nolog
+```text
+1 → Guerreiro
+2 → Arqueiro
+3 → Mago
+...
 ```
 
-Build:
+### Partida B
 
-```bash
-npm run build-nolog
+```text
+1 → Mago
+2 → Guerreiro
+3 → Arqueiro
+...
 ```
 
-Or, to disable the log entirely, simply delete the file `log.js` and remove the call to it in the `scripts` section of `package.json`:
+Portanto, nenhuma classe possui permanentemente um número específico.
 
-Before:
+O número existe apenas como representação lógica interna do Sudoku.
 
-```json
-"scripts": {
-    "dev": "node log.js dev & dev-template-script",
-    "build": "node log.js build & build-template-script"
-},
+---
+
+# 4. Sistema de Sudoku
+
+Cada batalha utiliza um Sudoku válido com:
+
+- grade 9×9;
+- solução válida;
+- solução única;
+- dificuldade previamente determinada;
+- pistas iniciais;
+- posições vazias que serão preenchidas durante a batalha.
+
+O Sudoku funciona simultaneamente como:
+
+- puzzle;
+- campo de batalha;
+- sistema de posicionamento das unidades;
+- base para ataques;
+- base para combos e sinergias.
+
+---
+
+# 5. Geração dos Tabuleiros
+
+O jogo não precisa gerar e analisar completamente um novo Sudoku durante uma batalha.
+
+A estratégia planejada é trabalhar com **Sudokus-base previamente validados**.
+
+Fluxo:
+
+```text
+Sudoku-base
+    ↓
+Solução única previamente validada
+    ↓
+Dificuldade previamente classificada
+    ↓
+Transformações válidas
+    ↓
+Embaralhamento das classes
+    ↓
+Tabuleiro da batalha
 ```
 
-After:
+Isso evita processamento desnecessário durante o gameplay e garante que o tabuleiro utilizado possui a dificuldade esperada.
 
-```json
-"scripts": {
-    "dev": "dev-template-script",
-    "build": "build-template-script"
-},
+---
+
+# 6. Variações de um Sudoku
+
+Um Sudoku-base pode gerar diversas variações sem alterar sua estrutura lógica fundamental.
+
+Entre as transformações possíveis estão:
+
+- troca global dos símbolos;
+- troca válida de linhas;
+- troca válida de colunas;
+- troca de grupos de linhas;
+- troca de grupos de colunas;
+- rotação;
+- espelhamento.
+
+Essas operações permitem gerar uma quantidade muito grande de apresentações diferentes a partir de um conjunto relativamente pequeno de Sudokus-base.
+
+---
+
+# 7. Sistema de Dificuldade do Sudoku
+
+O jogo possuirá cinco níveis principais:
+
+```text
+Fácil
+  ↓
+Normal
+  ↓
+Difícil
+  ↓
+Elite
+  ↓
+Boss
 ```
 
-Either of these will stop `log.js` from running. If you do decide to do this, please could you at least join our Discord and tell us which template you're using! Or send us a quick email. Either will be super-helpful, thank you.
+A dificuldade não será determinada exclusivamente pela quantidade de pistas existentes no tabuleiro.
 
-## Join the Phaser Community!
+O principal critério será a **complexidade lógica necessária para resolver o Sudoku**.
 
-We love to see what developers like you create with Phaser! It really motivates us to keep improving. So please join our community and show-off your work 😄
+---
 
-**Visit:** The [Phaser website](https://phaser.io) and follow on [Phaser Twitter](https://twitter.com/phaser_)<br />
-**Play:** Some of the amazing games [#madewithphaser](https://twitter.com/search?q=%23madewithphaser&src=typed_query&f=live)<br />
-**Learn:** [API Docs](https://newdocs.phaser.io), [Support Forum](https://phaser.discourse.group/) and [StackOverflow](https://stackoverflow.com/questions/tagged/phaser-framework)<br />
-**Discord:** Join us on [Discord](https://discord.gg/phaser)<br />
-**Code:** 2000+ [Examples](https://labs.phaser.io)<br />
-**Read:** The [Phaser World](https://phaser.io/community/newsletter) Newsletter<br />
+# 8. Técnicas de Sudoku por Dificuldade
 
-Created by [Phaser Studio](mailto:support@phaser.io). Powered by coffee, anime, pixels and love.
+## 8.1 Fácil
 
-The Phaser logo and characters are &copy; 2011 - 2025 Phaser Studio Inc.
+Técnicas:
 
-All rights reserved.
+- Naked Single;
+- Hidden Single.
+
+### Naked Single
+
+Uma determinada casa possui apenas uma possibilidade válida.
+
+### Hidden Single
+
+Uma classe possui apenas uma posição possível dentro de determinada linha, coluna ou bloco 3×3.
+
+### Objetivo
+
+Introduzir o jogador ao sistema e permitir resolução relativamente rápida.
+
+---
+
+# 9. Normal
+
+> **Dificuldade padrão do MVP.**
+
+Técnicas:
+
+- Naked Single;
+- Hidden Single;
+- Locked Candidates;
+- Naked Pair.
+
+### Locked Candidates
+
+Quando determinado candidato dentro de um bloco 3×3 está restrito a uma mesma linha ou coluna, permitindo eliminar esse candidato de outras posições relacionadas.
+
+### Naked Pair
+
+Duas casas de uma mesma unidade possuem exatamente os mesmos dois candidatos.
+
+Exemplo:
+
+```text
+Casa A → Guerreiro / Mago
+Casa B → Guerreiro / Mago
+```
+
+Isso significa que essas duas classes obrigatoriamente ocuparão essas duas posições, permitindo eliminar esses candidatos das outras casas da mesma unidade.
+
+### Objetivo
+
+Ser a dificuldade padrão das batalhas durante o MVP.
+
+O jogador deverá observar o tabuleiro e realizar pequenas deduções, mas não será necessário utilizar técnicas avançadas de Sudoku.
+
+---
+
+# 10. Difícil
+
+Inclui todas as técnicas anteriores e adiciona:
+
+- Hidden Pair;
+- Naked Triple;
+- Hidden Triple;
+- Box/Line Reduction.
+
+### Objetivo
+
+Exigir planejamento maior e análise de múltiplas casas simultaneamente.
+
+---
+
+# 11. Elite
+
+Inclui todas as técnicas anteriores e adiciona:
+
+- X-Wing;
+- XY-Wing;
+- Swordfish;
+- Coloring.
+
+### Objetivo
+
+Criar encontros que exijam domínio significativo da lógica do Sudoku.
+
+Esses tabuleiros poderão ser utilizados principalmente contra inimigos especiais ou encontros de maior dificuldade.
+
+---
+
+# 12. Boss
+
+Inclui todas as técnicas anteriores e pode exigir:
+
+- Chains;
+- AIC — Alternating Inference Chains;
+- Forcing Chains;
+- combinação de múltiplas técnicas avançadas.
+
+O nível Boss não precisa possuir uma técnica exclusiva.
+
+Sua característica principal é exigir sequências de raciocínio mais complexas e combinações de técnicas.
+
+Exemplo:
+
+```text
+Naked Pair
+    ↓
+Locked Candidate
+    ↓
+X-Wing
+    ↓
+Hidden Single
+    ↓
+XY-Wing
+    ↓
+Chain
+```
+
+---
+
+# 13. Regra de Classificação
+
+A dificuldade de um Sudoku não será definida apenas pela quantidade de pistas.
+
+Um tabuleiro será classificado principalmente pela **técnica mais avançada necessária para resolvê-lo completamente**.
+
+Classificação planejada:
+
+| Dificuldade | Técnicas máximas necessárias |
+|---|---|
+| **Fácil** | Naked Single / Hidden Single |
+| **Normal** | Locked Candidates / Naked Pair |
+| **Difícil** | Hidden Pair / Naked Triple / Hidden Triple / Box-Line Reduction |
+| **Elite** | X-Wing / XY-Wing / Swordfish / Coloring |
+| **Boss** | Chains / AIC / Forcing Chains / combinações avançadas |
+
+Os limites poderão ser ajustados após testes de gameplay.
+
+---
+
+# 14. Quantidade de Pistas
+
+A quantidade de pistas funciona como um parâmetro auxiliar, e não como definição absoluta da dificuldade.
+
+Faixas iniciais para testes:
+
+| Dificuldade | Pistas aproximadas |
+|---|---:|
+| Fácil | 40–46 |
+| Normal | 34–39 |
+| Difícil | 29–33 |
+| Elite | 25–28 |
+| Boss | aproximadamente 22–26 |
+
+Esses valores não são regras definitivas.
+
+Dois Sudokus com a mesma quantidade de pistas podem possuir dificuldades completamente diferentes.
+
+---
+
+# 15. Dificuldade do Sudoku × Dificuldade do Combate
+
+A dificuldade lógica do Sudoku deve permanecer separada da dificuldade provocada pelo inimigo.
+
+Conceitualmente:
+
+```text
+Dificuldade da batalha
+        =
+Dificuldade do Sudoku
+        +
+Características do inimigo
+        +
+Modificadores da batalha
+```
+
+Isso permitirá futuramente que dois inimigos utilizem Sudokus da mesma dificuldade, mas produzam batalhas completamente diferentes.
+
+Exemplo:
+
+```text
+Sudoku Normal
++
+Inimigo simples
+=
+Batalha relativamente tranquila
+```
+
+Enquanto:
+
+```text
+Sudoku Normal
++
+Inimigo com habilidades especiais
+=
+Batalha mais complexa
+```
+
+---
+
+# 16. Habilidades dos Inimigos
+
+Futuramente, inimigos poderão interferir diretamente no tabuleiro.
+
+Possibilidades:
+
+- bloquear temporariamente casas;
+- ocultar pistas;
+- afetar linhas;
+- afetar colunas;
+- afetar blocos 3×3;
+- aplicar penalidades;
+- modificar condições de combate;
+- criar objetivos temporários;
+- reagir ao posicionamento de determinadas classes.
+
+Essas habilidades não alteram necessariamente a classificação lógica original do Sudoku.
+
+Elas pertencem à camada de **combate**.
+
+---
+
+# 17. Bosses
+
+Bosses poderão combinar:
+
+```text
+Sudoku mais complexo
++
+Habilidades exclusivas
++
+Mudanças de fase
++
+Interferências no tabuleiro
+```
+
+Um Boss poderá possuir diferentes fases conforme sua vida diminui.
+
+Exemplo conceitual:
+
+```text
+100% HP
+↓
+Fase 1
+
+70% HP
+↓
+Nova habilidade
+
+40% HP
+↓
+Nova interferência no tabuleiro
+
+15% HP
+↓
+Fase final
+```
+
+Isso permite que Bosses alterem a dinâmica da batalha sem depender exclusivamente de aumentos de HP ou dano.
+
+---
+
+# 18. Configuração do MVP
+
+Para a primeira versão jogável:
+
+```text
+Dificuldade: NORMAL
+
+Sudoku:
+✓ 9×9
+✓ solução única
+✓ previamente validado
+✓ Sudoku-base aleatório
+✓ transformações válidas
+✓ aproximadamente 34–39 pistas
+✓ Naked Single
+✓ Hidden Single
+✓ Locked Candidates
+✓ Naked Pair
+
+Classes:
+✓ mesmas 9 classes
+✓ associação aleatória a cada partida
+
+Combate:
+✓ sistema atual de unidades
+✓ posicionamento no tabuleiro
+✓ ataques
+✓ sinergias
+```
+
+---
+
+# 19. Fluxo de uma Nova Partida no MVP
+
+```text
+NOVA PARTIDA
+      ↓
+Selecionar Sudoku-base NORMAL
+      ↓
+Aplicar transformação válida aleatória
+      ↓
+Sortear associação das 9 classes
+      ↓
+Carregar pistas iniciais
+      ↓
+Montar tabuleiro
+      ↓
+Iniciar batalha
+```
+
+Cada nova execução deverá produzir uma configuração visualmente diferente, mantendo a mesma faixa de dificuldade lógica.
+
+---
+
+# 20. Princípios de Design
+
+O sistema deverá seguir alguns princípios:
+
+**1. Sudoku primeiro**
+
+Toda configuração precisa continuar sendo um Sudoku válido.
+
+**2. Solução única**
+
+O jogador nunca deverá encontrar um tabuleiro ambíguo.
+
+**3. Dificuldade controlável**
+
+O jogo precisa saber previamente qual dificuldade está sendo apresentada.
+
+**4. Aleatoriedade controlada**
+
+Aleatoriedade não pode quebrar as regras do Sudoku.
+
+**5. Separação entre puzzle e RPG**
+
+A dificuldade lógica do Sudoku e a dificuldade do combate devem ser sistemas independentes que podem trabalhar em conjunto.
+
+**6. Variedade**
+
+Mesmo utilizando a mesma dificuldade, diferentes partidas devem apresentar tabuleiros e disposições de personagens diferentes.
+
+---
+
+# 21. Estado Atual da Decisão de Design
+
+Para o MVP, está definido:
+
+> **Todas as partidas utilizarão inicialmente Sudokus de dificuldade NORMAL.**
+
+Cada nova partida deverá selecionar uma configuração diferente do Sudoku e realizar uma nova associação entre os nove símbolos internos e as nove classes existentes.
+
+As dificuldades:
+
+```text
+Fácil → Normal → Difícil → Elite → Boss
+```
+
+ficarão previstas na arquitetura desde o início, mesmo que somente **Normal** esteja ativo na primeira versão.
+
+---
+
+# 22. Pontos a Definir
+
+Os seguintes sistemas ainda serão detalhados durante o desenvolvimento:
+
+- lista definitiva das 9 classes;
+- habilidades individuais das classes;
+- sistema definitivo de sinergias;
+- cálculo de dano;
+- relação entre combos de Sudoku e ataques;
+- progressão do jogador;
+- progressão dos inimigos;
+- habilidades dos inimigos;
+- sistema de Elite;
+- mecânicas específicas de Boss;
+- geração/classificação automática dos Sudokus;
+- quantidade final de Sudokus-base por dificuldade;
+- interface para candidatos possíveis;
+- feedback visual para jogadas válidas e inválidas;
+- sistema de recompensa;
+- progressão roguelite;
+- condições de vitória e derrota.
+
+---
+
+> **Nota de desenvolvimento:** Este documento representa o estado atual do design e deverá ser atualizado conforme as mecânicas forem testadas e validadas durante o desenvolvimento do MVP.
