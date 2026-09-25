@@ -939,6 +939,23 @@ export class Game extends Scene {
             ? 0x9d81ff
             : synergy.id === 'natures-blessing' ? 0x63d69b : 0xf0b429;
         const lineWidth = synergy.id === 'arcane-arrow' ? 2 : 3;
+
+        // Realça discretamente o chão das duas células envolvidas na sinergia.
+        // O preenchimento fica atrás das unidades e usa a mesma cor da conexão.
+        const cellHighlight = this.add.graphics().setDepth(5);
+        const highlightInset = 4;
+        cellHighlight.fillStyle(color, 0.12);
+        [firstCharacter, secondCharacter].forEach((character) => {
+            cellHighlight.fillRoundedRect(
+                character.sprite.x - CELL_SIZE / 2 + highlightInset,
+                character.sprite.y - CELL_SIZE / 2 + highlightInset,
+                CELL_SIZE - highlightInset * 2,
+                CELL_SIZE - highlightInset * 2,
+                8
+            );
+        });
+        this.synergyConnectionGraphics.push(cellHighlight);
+
         graphics.lineStyle(lineWidth, color, 0.6);
         graphics.lineBetween(firstCharacter.sprite.x, firstCharacter.sprite.y, secondCharacter.sprite.x, secondCharacter.sprite.y);
         graphics.lineStyle(2, color, 0.5);
@@ -946,6 +963,14 @@ export class Game extends Scene {
         graphics.strokeCircle(secondCharacter.sprite.x, secondCharacter.sprite.y, 26);
         this.synergyConnectionGraphics.push(graphics);
 
+        this.tweens.add({
+            targets: cellHighlight,
+            alpha: { from: 0.55, to: 0.85 },
+            duration: 900,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
         this.tweens.add({ targets: graphics, alpha: 0.45, duration: 260, yoyo: true });
     }
 
