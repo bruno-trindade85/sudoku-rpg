@@ -71,6 +71,8 @@ export class Game extends Scene {
     private invalidHighlightVersion = 0;
     private draggedPiece?: { piece: PlacedCharacter; sourceCell: number };
     private synergyConnectionGraphics: Phaser.GameObjects.Graphics[] = [];
+    private cardHoldTimer?: Phaser.Time.TimerEvent;
+    private highlightedCharacterType?: string;
 
     constructor() {
         super('Game');
@@ -240,6 +242,15 @@ export class Game extends Scene {
 
                 selectedCharacter = character;
                 updateCharacterCardSelection();
+
+                this.stopCharacterPositionHighlight();
+                this.cardHoldTimer?.remove(false);
+                this.cardHoldTimer = this.time.delayedCall(1000, () => {
+                    this.startCharacterPositionHighlight(character.id);
+                });
+            });
+            card.on('pointerup', () => {
+                this.cancelCardHoldHighlight();
             });
             card.on('pointerover', () => {
                 if (this.playerState.isDefeated()) {
@@ -250,10 +261,12 @@ export class Game extends Scene {
                 this.tweens.add({ targets: card, y: cardY - 8, scaleX: 1.03, scaleY: 1.03, duration: 140, ease: 'Sine.Out' });
             });
             card.on('pointerout', () => {
+                this.cancelCardHoldHighlight();
                 this.tweens.killTweensOf(card);
                 this.tweens.add({ targets: card, y: cardY, scaleX: 1, scaleY: 1, duration: 140, ease: 'Sine.Out' });
             });
             card.on('dragstart', () => {
+                this.cancelCardHoldHighlight();
                 if (!this.playerState.isDefeated()) {
                     this.tweens.killTweensOf(card);
                     card.setScale(1);
@@ -421,6 +434,50 @@ export class Game extends Scene {
                 this.invalidHighlight?.setVisible(false);
             }
         });
+    }
+
+    private startCharacterPositionHighlight(characterType: string) {
+        this.highlightedCharacterType = characterType;
+
+        for (const placedCharacter of this.pieceVisuals.values()) {
+            if (placedCharacter.type !== characterType) {
+                continue;
+            }
+
+            this.tweens.killTweensOf(placedCharacter.sprite);
+            placedCharacter.sprite.setAlpha(1);
+            this.tweens.add({
+                targets: placedCharacter.sprite,
+                alpha: 0.25,
+                duration: 260,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+        }
+    }
+
+    private stopCharacterPositionHighlight() {
+        if (!this.highlightedCharacterType) {
+            return;
+        }
+
+        for (const placedCharacter of this.pieceVisuals.values()) {
+            if (placedCharacter.type !== this.highlightedCharacterType) {
+                continue;
+            }
+
+            this.tweens.killTweensOf(placedCharacter.sprite);
+            placedCharacter.sprite.setAlpha(1);
+        }
+
+        this.highlightedCharacterType = undefined;
+    }
+
+    private cancelCardHoldHighlight() {
+        this.cardHoldTimer?.remove(false);
+        this.cardHoldTimer = undefined;
+        this.stopCharacterPositionHighlight();
     }
 
     private startCardDrag(character: CharacterType, x: number, y: number) {
