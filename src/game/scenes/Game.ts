@@ -73,6 +73,7 @@ export class Game extends Scene {
     private synergyConnectionGraphics: Phaser.GameObjects.Graphics[] = [];
     private cardHoldTimer?: Phaser.Time.TimerEvent;
     private highlightedCharacterType?: string;
+    private highlightedSprites: Phaser.GameObjects.Image[] = [];
 
     constructor() {
         super('Game');
@@ -317,6 +318,9 @@ export class Game extends Scene {
 
         this.boardState.setCell(cellIndex, { type: character.id });
         const placedCharacter = this.placeCharacter(character, x, y);
+        // Uma unidade recém-criada nunca herda o alpha/tween do destaque por long press.
+        this.tweens.killTweensOf(placedCharacter.sprite);
+        placedCharacter.sprite.setVisible(true).setAlpha(1).setDepth(10);
         this.pieceVisuals.set(cellIndex, placedCharacter);
         this.updateRegionState(row, column, this.boardX, this.boardY);
         this.refreshSynergyIndicators();
@@ -451,18 +455,21 @@ export class Game extends Scene {
     }
 
     private startCharacterPositionHighlight(characterType: string) {
+        this.stopCharacterPositionHighlight();
         this.highlightedCharacterType = characterType;
 
-        for (const placedCharacter of this.pieceVisuals.values()) {
-            if (placedCharacter.type !== characterType) {
-                continue;
-            }
+        // Congela a lista no instante em que o long press é ativado.
+        // Unidades criadas depois disso nunca entram neste efeito.
+        this.highlightedSprites = Array.from(this.pieceVisuals.values())
+            .filter((placedCharacter) => placedCharacter.type === characterType)
+            .map((placedCharacter) => placedCharacter.sprite);
 
-            this.tweens.killTweensOf(placedCharacter.sprite);
-            placedCharacter.sprite.setVisible(true).setAlpha(1).setDepth(10);
+        for (const sprite of this.highlightedSprites) {
+            this.tweens.killTweensOf(sprite);
+            sprite.setVisible(true).setAlpha(1).setDepth(10);
             this.tweens.add({
-                targets: placedCharacter.sprite,
-                alpha: 0.25,
+                targets: sprite,
+                alpha: 0.35,
                 duration: 260,
                 yoyo: true,
                 repeat: -1,
@@ -472,19 +479,16 @@ export class Game extends Scene {
     }
 
     private stopCharacterPositionHighlight() {
-        if (!this.highlightedCharacterType) {
-            return;
-        }
-
-        for (const placedCharacter of this.pieceVisuals.values()) {
-            if (placedCharacter.type !== this.highlightedCharacterType) {
+        for (const sprite of this.highlightedSprites) {
+            if (!sprite.active) {
                 continue;
             }
 
-            this.tweens.killTweensOf(placedCharacter.sprite);
-            placedCharacter.sprite.setAlpha(1);
+            this.tweens.killTweensOf(sprite);
+            sprite.setVisible(true).setAlpha(1).setDepth(10);
         }
 
+        this.highlightedSprites = [];
         this.highlightedCharacterType = undefined;
     }
 
@@ -520,6 +524,8 @@ export class Game extends Scene {
     }
 
     private finishCardDrag(character: CharacterType, x: number, y: number) {
+        // Drag e long press são estados mutuamente exclusivos.
+        this.cancelCardHoldHighlight();
         const cell = this.getCellAtPosition(x, y);
         this.dragHighlight?.setVisible(false);
         this.cardDragText?.destroy();
