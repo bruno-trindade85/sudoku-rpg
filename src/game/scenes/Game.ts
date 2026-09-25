@@ -767,12 +767,29 @@ export class Game extends Scene {
             return;
         }
 
+        const originalX = dragonAvatar.x;
+
+        // Impacto curto para dar peso ao golpe.
+        this.tweens.killTweensOf(dragonAvatar);
         this.tweens.add({
             targets: dragonAvatar,
-            x: dragonAvatar.x + 5,
+            x: originalX + 5,
             duration: 70,
             yoyo: true,
-            repeat: 2
+            repeat: 2,
+            onComplete: () => dragonAvatar.setX(originalX)
+        });
+
+        // Pisca por aproximadamente 2 segundos após receber dano.
+        // O alpha nunca chega a zero para o dragão continuar legível durante o efeito.
+        this.tweens.add({
+            targets: dragonAvatar,
+            alpha: 0.28,
+            duration: 125,
+            yoyo: true,
+            repeat: 7,
+            ease: 'Sine.easeInOut',
+            onComplete: () => dragonAvatar.setAlpha(1)
         });
     }
 
