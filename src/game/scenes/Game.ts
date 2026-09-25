@@ -403,7 +403,15 @@ export class Game extends Scene {
     }
 
     private movePieceVisual(piece: PlacedCharacter, position: { x: number; y: number }) {
-        piece.sprite.setPosition(position.x, position.y);
+        piece.sprite
+            .setPosition(position.x, position.y)
+            .setVisible(true)
+            .setDepth(10);
+
+        // Fora do destaque por carta, nenhuma peça pode permanecer transparente.
+        if (this.highlightedCharacterType !== piece.type) {
+            piece.sprite.setAlpha(1);
+        }
     }
 
     private playPlacementAnimation(piece: PlacedCharacter) {
@@ -417,13 +425,17 @@ export class Game extends Scene {
     }
 
     private playSummonAnimation(piece: PlacedCharacter) {
-        piece.sprite.setScale(0).setAlpha(0);
+        // A animação de invocação mexe apenas na escala. Manter o alpha em 1
+        // evita que uma interrupção de tween deixe uma unidade invisível no tabuleiro.
+        piece.sprite.setVisible(true).setAlpha(1).setDepth(10).setScale(0);
         this.tweens.add({
             targets: piece.sprite,
             scaleX: UNIT_SPRITE_SCALE,
             scaleY: UNIT_SPRITE_SCALE,
-            alpha: 1,
-            duration: 180
+            duration: 180,
+            onComplete: () => {
+                piece.sprite.setVisible(true).setAlpha(1).setDepth(10).setScale(UNIT_SPRITE_SCALE);
+            }
         });
     }
 
