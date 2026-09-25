@@ -3,22 +3,26 @@ import type { Scene } from 'phaser';
 const COLORS = {
     bossHp: 0xd94d54,
     hpBackground: 0x17191f,
-    heroPanel: 0x263847,
+    heroPanel: 0x171b22,
     heroHp: 0x63d69b,
-    repositionPanel: 0x2d3748,
+    repositionPanel: 0x171b22,
     repositionActive: 0x7057bf,
-    panel: 0x242833,
+    panel: 0x171b22,
     button: 0x3a4050,
     buttonActive: 0x5b4ec7
 };
 
 const HUD_LAYOUT = {
+    panelX: 118,
+    panelY: 168,
+    panelWidth: 204,
+    panelHeight: 318,
     repositionPanelX: 118,
-    repositionPanelY: 46,
+    repositionPanelY: 112,
     damageHistoryX: 118,
-    damageHistoryY: 209,
-    heroPanelX: 350,
-    heroPanelY: 46,
+    damageHistoryY: 222,
+    heroPanelX: 118,
+    heroPanelY: 52,
     dragonOffsetFromBoard: 145
 };
 
@@ -47,6 +51,7 @@ export class GameUI {
         const dragonPanelY = boardY + boardSize / 2;
 
         this.createDragonInterface(dragonPanelX, dragonPanelY);
+        this.createLeftHudPanel();
         this.createHeroInterface(HUD_LAYOUT.heroPanelX, HUD_LAYOUT.heroPanelY);
         this.createDamageHistory(HUD_LAYOUT.damageHistoryX, HUD_LAYOUT.damageHistoryY);
         this.createRepositionInterface(onRepositionRequest);
@@ -82,7 +87,7 @@ export class GameUI {
 
         const recentEvents = combatHistory.slice(-5);
         if (recentEvents.length === 0) {
-            this.combatHistoryTexts.push(this.scene.add.text(HUD_LAYOUT.damageHistoryX - 78, HUD_LAYOUT.damageHistoryY - 55, 'Nenhum evento.', {
+            this.combatHistoryTexts.push(this.scene.add.text(HUD_LAYOUT.damageHistoryX - 78, HUD_LAYOUT.damageHistoryY - 50, 'Nenhum evento.', {
                 fontFamily: 'Arial', fontSize: 17, color: '#ffffff'
             }));
             return;
@@ -90,7 +95,7 @@ export class GameUI {
 
         recentEvents.forEach((event, index) => {
             const presentation = getCombatEventPresentation(event);
-            this.combatHistoryTexts.push(this.scene.add.text(HUD_LAYOUT.damageHistoryX - 78, HUD_LAYOUT.damageHistoryY - 55 + index * 28, presentation.text, {
+            this.combatHistoryTexts.push(this.scene.add.text(HUD_LAYOUT.damageHistoryX - 78, HUD_LAYOUT.damageHistoryY - 50 + index * 28, presentation.text, {
                 fontFamily: 'Arial', fontSize: 17, color: presentation.color
             }));
         });
@@ -162,37 +167,48 @@ export class GameUI {
         this.dragonHpBar = this.scene.add.rectangle(hpBarX, hpBarY, 190, 10, COLORS.bossHp).setOrigin(0, 0.5);
     }
 
+    private createLeftHudPanel(): void {
+        this.scene.add.rectangle(
+            HUD_LAYOUT.panelX,
+            HUD_LAYOUT.panelY,
+            HUD_LAYOUT.panelWidth,
+            HUD_LAYOUT.panelHeight,
+            COLORS.panel,
+            0.82
+        ).setStrokeStyle(1, 0x667080, 0.38);
+    }
+
     private createHeroInterface(panelX: number, panelY: number): void {
         const hpBarX = panelX - 78;
-        const hpBarY = panelY + 22;
+        const hpBarY = panelY + 19;
 
-        this.heroPanel = this.scene.add.rectangle(panelX, panelY, 204, 74, COLORS.heroPanel);
-        this.scene.add.text(panelX - 78, panelY - 25, 'HERÓI', {
+        // Referência invisível mantida para os efeitos que usam a posição do painel do herói.
+        this.heroPanel = this.scene.add.rectangle(panelX, panelY, 1, 1, COLORS.heroPanel, 0);
+        this.scene.add.text(panelX - 78, panelY - 23, 'HERÓI', {
             fontFamily: 'Arial Black', fontSize: 17, color: '#ffffff'
         });
-        this.heroHpText = this.scene.add.text(panelX - 78, panelY - 5, '', {
-            fontFamily: 'Arial', fontSize: 17, color: '#ffffff'
-        });
-        this.scene.add.rectangle(hpBarX, hpBarY, 156, 10, COLORS.hpBackground).setOrigin(0, 0.5);
-        this.heroHpBar = this.scene.add.rectangle(hpBarX, hpBarY, 156, 10, COLORS.heroHp).setOrigin(0, 0.5);
+        this.heroHpText = this.scene.add.text(panelX + 78, panelY - 21, '', {
+            fontFamily: 'Arial', fontSize: 15, color: '#dfe6ee'
+        }).setOrigin(1, 0);
+        this.scene.add.rectangle(hpBarX, hpBarY, 156, 8, COLORS.hpBackground).setOrigin(0, 0.5);
+        this.heroHpBar = this.scene.add.rectangle(hpBarX, hpBarY, 156, 8, COLORS.heroHp).setOrigin(0, 0.5);
     }
 
     private createDamageHistory(panelX: number, panelY: number): void {
-        this.scene.add.rectangle(panelX, panelY, 192, 220, COLORS.panel);
-        this.scene.add.text(panelX, panelY - 88, 'Histórico de combate', {
-            fontFamily: 'Arial Black', fontSize: 19, color: '#ffffff'
-        }).setOrigin(0.5);
+        this.scene.add.rectangle(panelX, panelY - 82, 164, 1, 0x667080, 0.35);
+        this.scene.add.text(panelX - 78, panelY - 72, 'HISTÓRICO DE COMBATE', {
+            fontFamily: 'Arial Black', fontSize: 15, color: '#ffffff'
+        });
     }
 
     private createRepositionInterface(onRepositionRequest: () => void): void {
         const panelX = HUD_LAYOUT.repositionPanelX;
         const panelY = HUD_LAYOUT.repositionPanelY;
 
-        this.scene.add.rectangle(panelX, panelY, 204, 74, COLORS.repositionPanel);
-        this.repositionText = this.scene.add.text(panelX, panelY - 17, '', {
-            fontFamily: 'Arial', fontSize: 17, color: '#ffffff'
-        }).setOrigin(0.5);
-        this.repositionButton = this.scene.add.rectangle(panelX, panelY + 16, 158, 25, COLORS.button)
+        this.repositionText = this.scene.add.text(panelX - 78, panelY - 17, '', {
+            fontFamily: 'Arial', fontSize: 14, color: '#dfe6ee'
+        });
+        this.repositionButton = this.scene.add.rectangle(panelX, panelY + 16, 158, 27, COLORS.button)
             .setInteractive({ useHandCursor: true });
         this.repositionButtonText = this.scene.add.text(panelX, panelY + 16, '', {
             fontFamily: 'Arial Black', fontSize: 15, color: '#ffffff'
