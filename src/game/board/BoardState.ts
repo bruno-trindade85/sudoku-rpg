@@ -5,6 +5,7 @@ export const REGION_SIZE = 3;
 
 export type BoardUnit = {
     type: UnitType;
+    isGiven: boolean;
 };
 
 export type RegionState = {

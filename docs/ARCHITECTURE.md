@@ -17,8 +17,13 @@ A modularização atual separa configuração de unidades, estado do tabuleiro, 
 │   └── assets/
 ├── src/
 │   ├── main.ts
+│   ├── data/
+│   │   └── sudoku/
+│   │       └── normal.json
 │   └── game/
 │       ├── main.ts
+│       ├── sudoku/
+│       │   └── NormalSudoku.ts
 │       ├── board/
 │       │   ├── BoardState.ts
 │       │   └── BoardValidator.ts
@@ -43,7 +48,7 @@ A modularização atual separa configuração de unidades, estado do tabuleiro, 
 
 ### Application bootstrap
 
-`src/main.ts` espera `DOMContentLoaded` e chama `StartGame`. `src/game/main.ts` cria a configuração Phaser: canvas lógico de 1920x1080, escala `FIT`, centralização automática e apenas a cena `Game`. A cena carrega `assets/backgrounds/dungeon-01.png` como fundo dimensionado proporcionalmente para cobrir a área lógica.
+`src/main.ts` espera `DOMContentLoaded` e chama `StartGame`. `src/game/main.ts` cria a configuração Phaser: canvas lógico de 1920x1080, escala `FIT`, centralização automática e apenas a cena `Game`. A cena pré-carrega os 14 mapas de `assets/backgrounds`, sorteia um deles a cada partida sem repetição consecutiva e o dimensiona proporcionalmente para cobrir a área lógica.
 
 ### `UnitConfig`
 
@@ -58,6 +63,7 @@ Não há regras de Sudoku ou comportamento de classe neste módulo.
 Estado próprio:
 
 - unidade lógica em cada célula ocupada;
+- `isGiven` em cada unidade para identificar pistas iniciais;
 - `isCurrentlyComplete` por região;
 - `hasAttacked` por região.
 
@@ -81,6 +87,17 @@ Implementa regras puras sobre um `ReadonlyMap` do tabuleiro:
 - `getRegionIndex` converte linha/coluna no índice 0–8 da região.
 
 Depende dos tipos e dimensões de `BoardState`. Não altera estado.
+
+### `NormalSudoku`
+
+É a camada de dados e estado da partida Normal, independente de Phaser. Importa `src/data/sudoku/normal.json` como fonte oficial e valida automaticamente, ao carregar o módulo:
+
+- presença de exatamente 100 puzzles com IDs únicos e dificuldade `normal`;
+- 81 valores em cada puzzle e solução, com faixas numéricas corretas;
+- quantidade declarada de pistas e compatibilidade de cada pista com a solução;
+- validade das linhas, colunas e regiões 3x3 das soluções.
+
+Ao criar uma partida, seleciona um puzzle aleatório diferente do imediatamente anterior e conserva o último ID em `sessionStorage` para aplicar a mesma regra após refresh na aba. Também embaralha os nove `UnitType` em uma permutação dos dígitos 1–9. O `GameSudokuState` preserva o ID, puzzle e solução numéricos, além dos mapas `digitToUnit` e `unitToDigit`. Ele não altera o tabuleiro nem cria objetos Phaser.
 
 ### `SynergyManager`
 
@@ -144,6 +161,7 @@ Responsabilidades ainda presentes:
 
 - layout e desenho do tabuleiro e da área de unidades;
 - criação das peças Phaser e mapa `pieceVisuals`;
+- criação do estado Sudoku Normal e materialização de suas pistas no `BoardState`;
 - hover, seleção, clique, drag-and-drop, previews e feedback inválido;
 - coordenação de colocação, movimento e swap;
 - modo de reposicionamento e sua seleção de origem;
@@ -160,7 +178,10 @@ O mapa `pieceVisuals` associa células a objetos Phaser, mas não é a fonte de 
 | Informação | Fonte de verdade |
 |---|---|
 | IDs, nomes, símbolos e cores das unidades | `UnitConfig` |
+| Banco de puzzles Normal | `src/data/sudoku/normal.json`, validado por `NormalSudoku` |
+| Puzzle, solução e mapeamento dígito ↔ unidade da partida | `GameSudokuState` criado por `NormalSudoku` |
 | Unidades nas células | `BoardState.cells` |
+| Identidade de pista inicial (`isGiven`) | `BoardState.cells` |
 | Completude atual das regiões | `BoardState.regions.isCurrentlyComplete` |
 | Região já atacou | `BoardState.regions.hasAttacked` |
 | Validade de colocação, movimento, swap e região | `BoardValidator` |
@@ -174,6 +195,19 @@ O mapa `pieceVisuals` associa células a objetos Phaser, mas não é a fonte de 
 | Valores exibidos no histórico de combate | lista de eventos em `Game`; renderização em `GameUI` |
 
 ## Main Game Flows
+
+### Normal Game Initialization
+
+```mermaid
+flowchart TD
+    A[Create or restart Game scene] --> B[NormalSudoku selects one of 100 puzzles]
+    B --> C[Exclude immediately previous puzzle ID]
+    C --> D[Shuffle nine units into digits 1-9]
+    D --> E[Keep numeric puzzle and solution in GameSudokuState]
+    E --> F[Game converts each nonzero clue through digitToUnit]
+    F --> G[BoardState receives unit with isGiven true]
+    G --> H[Game creates the existing piece visual]
+```
 
 ### Placement Flow
 
@@ -256,6 +290,7 @@ flowchart TD
 ### Domain and game logic
 
 - `UnitConfig` is foundational configuration.
+- `NormalSudoku` depends only on the static Normal dataset and unit types.
 - `BoardState` may depend on unit types.
 - `BoardValidator` reads board types/state but must not mutate them.
 - `SynergyManager` reads logical board data and unit IDs.

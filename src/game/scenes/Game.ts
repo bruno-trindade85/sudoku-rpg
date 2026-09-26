@@ -1,5 +1,11 @@
 import { Scene } from 'phaser';
-import { CHARACTER_TYPES, UNIT_SPRITE_FLIP_X, UNIT_TEXTURES, type CharacterType } from '../units/UnitConfig';
+import {
+    CHARACTER_TYPES,
+    UNIT_SPRITE_FLIP_X,
+    UNIT_TEXTURES,
+    type CharacterType,
+    type UnitType
+} from '../units/UnitConfig';
 import { BoardState, GRID_SIZE, REGION_SIZE } from '../board/BoardState';
 import {
     canMoveOrSwap,
@@ -16,6 +22,7 @@ import {
 import { PlayerState } from '../player/PlayerState';
 import { CombatManager } from '../combat/CombatManager';
 import { GameUI, type CombatHistoryEvent } from '../ui/GameUI';
+import { createNormalSudokuState, type GameSudokuState } from '../sudoku/NormalSudoku';
 
 const GAME_WIDTH = 1920;
 const GAME_HEIGHT = 1080;
@@ -23,14 +30,20 @@ const CELL_SIZE = 92;
 const BOARD_SIZE = GRID_SIZE * CELL_SIZE;
 const BOARD_X = (GAME_WIDTH - BOARD_SIZE) / 2;
 const BOARD_Y = (GAME_HEIGHT - BOARD_SIZE) / 2 - 45;
-const BACKGROUND_TEXTURE_KEY = 'dungeon-background';
+const BACKGROUND_TEXTURES = Array.from({ length: 14 }, (_, index) => {
+    const mapNumber = index + 1;
+    return {
+        key: `dungeon-background-${mapNumber}`,
+        path: `assets/backgrounds/dungeon-00 (${mapNumber}).png`
+    };
+});
 const UNIT_CARD_WIDTH = 140;
 const UNIT_CARD_HEIGHT = 90;
 const UNIT_CARD_GAP = 16;
 const UNIT_CARD_BOTTOM_MARGIN = 18;
 const UNIT_SPRITE_SCALE = 2;
 type PlacedCharacter = {
-    type: string;
+    type: UnitType;
     sprite: Phaser.GameObjects.Image;
 };
 
@@ -59,6 +72,8 @@ export class Game extends Scene {
     private readonly playerState = new PlayerState();
     private readonly combatManager = new CombatManager();
     private readonly pieceVisuals = new Map<number, PlacedCharacter>();
+    private sudokuState!: GameSudokuState;
+    private backgroundTextureKey?: string;
     private gameUI!: GameUI;
     private combatHistory: CombatHistoryEvent[] = [];
     private isRepositionMode = false;
@@ -77,7 +92,9 @@ export class Game extends Scene {
     }
 
     preload() {
-        this.load.image(BACKGROUND_TEXTURE_KEY, 'assets/backgrounds/dungeon-01.png');
+        BACKGROUND_TEXTURES.forEach((background) => {
+            this.load.image(background.key, background.path);
+        });
         CHARACTER_TYPES.forEach((character) => {
             this.load.image(UNIT_TEXTURES[character.id], `assets/units/${UNIT_TEXTURES[character.id]}.png`);
         });
@@ -89,6 +106,7 @@ export class Game extends Scene {
         const boardY = BOARD_Y;
         this.boardX = boardX;
         this.boardY = boardY;
+        this.selectRandomBackground();
         this.createDungeonBackground();
         const graphics = this.add.graphics();
         const hoverHighlight = this.add.rectangle(0, 0, CELL_SIZE - 6, CELL_SIZE - 6, COLORS.hover, 0.2)
@@ -111,6 +129,7 @@ export class Game extends Scene {
         // de recriar os elementos visuais e os eventos.
         this.pieceVisuals.clear();
         this.boardState.reset();
+        this.sudokuState = createNormalSudokuState(CHARACTER_TYPES.map((character) => character.id));
         this.playerState.reset();
         this.combatManager.reset();
         this.combatHistory = [];
@@ -118,6 +137,7 @@ export class Game extends Scene {
         this.repositionSourceCell = undefined;
         this.events.off('region-completed', this.handleRegionAttack, this);
         this.events.on('region-completed', this.handleRegionAttack, this);
+        this.logCurrentSudokuForDevelopment();
 
         this.gameUI = new GameUI(this);
         this.gameUI.createHud(boardX, boardY, BOARD_SIZE, () => this.handleRepositionRequest());
@@ -138,7 +158,8 @@ export class Game extends Scene {
             const lineColor = isRegionBoundary ? COLORS.regionLine : COLORS.cellLine;
             const offset = index * CELL_SIZE;
 
-            graphics.lineStyle(lineWidth, lineColor, isRegionBoundary ? 0.9 : 0.58);
+            // Mantém a geometria do grid para futuros efeitos, mas sem exibir as linhas.
+            graphics.lineStyle(lineWidth, lineColor, 0);
             graphics.lineBetween(boardX + offset, boardY, boardX + offset, boardY + BOARD_SIZE);
             graphics.lineBetween(boardX, boardY + offset, boardX + BOARD_SIZE, boardY + offset);
         }
@@ -200,6 +221,9 @@ export class Game extends Scene {
                 });
             }
         }
+
+        this.placeInitialClues();
+        this.refreshSynergyIndicators();
 
         const cardsRowWidth = CHARACTER_TYPES.length * UNIT_CARD_WIDTH + (CHARACTER_TYPES.length - 1) * UNIT_CARD_GAP;
         const cardsRowY = this.scale.height - UNIT_CARD_HEIGHT / 2 - UNIT_CARD_BOTTOM_MARGIN;
@@ -289,7 +313,11 @@ export class Game extends Scene {
     }
 
     private createDungeonBackground() {
-        const background = this.add.image(this.scale.width / 2, this.scale.height / 2, BACKGROUND_TEXTURE_KEY)
+        if (!this.backgroundTextureKey) {
+            throw new Error('A background must be selected before creating the game scene.');
+        }
+
+        const background = this.add.image(this.scale.width / 2, this.scale.height / 2, this.backgroundTextureKey)
             .setDepth(-100);
         const source = background.texture.getSourceImage() as HTMLImageElement;
         const scale = Math.max(this.scale.width / source.width, this.scale.height / source.height);
@@ -297,12 +325,68 @@ export class Game extends Scene {
         background.setScale(scale);
     }
 
+    private selectRandomBackground(): void {
+        const availableBackgrounds = this.backgroundTextureKey === undefined
+            ? BACKGROUND_TEXTURES
+            : BACKGROUND_TEXTURES.filter((background) => background.key !== this.backgroundTextureKey);
+        const selectedIndex = Math.floor(Math.random() * availableBackgrounds.length);
+
+        this.backgroundTextureKey = availableBackgrounds[selectedIndex].key;
+    }
+
+    private placeInitialClues(): void {
+        this.sudokuState.puzzle.forEach((digit, cellIndex) => {
+            if (digit === 0) {
+                return;
+            }
+
+            const unitType = this.sudokuState.digitToUnit.get(digit);
+            const character = CHARACTER_TYPES.find((candidate) => candidate.id === unitType);
+
+            if (!unitType || !character) {
+                throw new Error(`Missing unit mapping for Sudoku digit ${digit}.`);
+            }
+
+            const row = Math.floor(cellIndex / GRID_SIZE);
+            const column = cellIndex % GRID_SIZE;
+            const position = this.getCellCenter(row, column);
+
+            this.boardState.setCell(cellIndex, { type: unitType, isGiven: true });
+            this.pieceVisuals.set(cellIndex, this.placeCharacter(character, position.x, position.y));
+        });
+
+        for (let regionRow = 0; regionRow < REGION_SIZE; regionRow++) {
+            for (let regionColumn = 0; regionColumn < REGION_SIZE; regionColumn++) {
+                const regionIndex = regionRow * REGION_SIZE + regionColumn;
+                const regionIsComplete = isRegionComplete(
+                    this.boardState.getCells(),
+                    regionRow,
+                    regionColumn
+                );
+                this.boardState.setRegionComplete(regionIndex, regionIsComplete);
+            }
+        }
+    }
+
+    private logCurrentSudokuForDevelopment(): void {
+        if (!import.meta.env.DEV) {
+            return;
+        }
+
+        const mapping = [...this.sudokuState.digitToUnit].map(([digit, unitType]) => {
+            const character = CHARACTER_TYPES.find((candidate) => candidate.id === unitType);
+            return `${digit} -> ${character?.name ?? unitType}`;
+        });
+
+        console.info(`Puzzle: ${this.sudokuState.puzzleId}\nMapeamento:\n${mapping.join('\n')}`);
+    }
+
     private tryPlaceCharacter(character: CharacterType, cellIndex: number, row: number, column: number, x: number, y: number): boolean {
         if (this.playerState.isDefeated() || !canPlace(this.boardState.getCells(), character.id, row, column)) {
             return false;
         }
 
-        this.boardState.setCell(cellIndex, { type: character.id });
+        this.boardState.setCell(cellIndex, { type: character.id, isGiven: false });
         const placedCharacter = this.placeCharacter(character, x, y);
         this.pieceVisuals.set(cellIndex, placedCharacter);
         this.updateRegionState(row, column, this.boardX, this.boardY);

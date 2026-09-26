@@ -20,6 +20,7 @@ Não é responsável por regras de colocação, estado do tabuleiro, sinergias o
 Responsável por:
 
 - fonte de verdade das unidades nas células;
+- estado `isGiven` que identifica pistas iniciais;
 - movimento e troca lógica de unidades;
 - consulta das células de uma região;
 - estados `isCurrentlyComplete` e `hasAttacked` das nove regiões;
@@ -39,6 +40,17 @@ Responsável por:
 - calcular o índice estrutural de uma região.
 
 Não é responsável por alterar `BoardState`, consumir reposicionamentos ou apresentar feedback.
+
+### `src/game/sudoku/NormalSudoku.ts`
+
+Responsável por:
+
+- carregar e validar os 100 puzzles de `src/data/sudoku/normal.json`;
+- selecionar aleatoriamente uma partida Normal, evitando repetição consecutiva inclusive após refresh na mesma aba;
+- gerar uma permutação bijetiva entre os dígitos 1–9 e os nove `UnitType`;
+- preservar o puzzle numérico, a solução numérica e os dois sentidos do mapeamento durante a partida.
+
+Não é responsável por alterar `BoardState`, criar sprites ou validar as regras de colocação do jogo.
 
 ### `src/game/synergies/SynergyManager.ts`
 
@@ -91,6 +103,7 @@ Não é fonte de verdade de nenhum valor lógico e não decide derrota, dano, cu
 - criar e renderizar tabuleiro, células, cartas e peças;
 - entrada por clique, seleção, drag-and-drop, movimento e swap;
 - manter o mapa de objetos visuais das peças (não o estado lógico delas);
+- montar no `BoardState` e renderizar as pistas fornecidas pelo estado Sudoku da partida;
 - coordenar conclusão e primeiro ataque das regiões;
 - aplicar ao `PlayerState` recompensas detectadas pelo `SynergyManager`;
 - manter a lista de eventos usada pelo histórico de combate;
@@ -109,6 +122,8 @@ Não adicione automaticamente novas regras de gameplay em `Game.ts`. Primeiro id
 
 - Tabuleiro 9x9 dividido em regiões 3x3.
 - Nove classes substituem os números: Mago, Arqueiro, Paladino, Ladino, Clérigo, Bárbaro, Druida, Feiticeiro Sombrio e Invocador.
+- O modo Normal sorteia um dos 100 puzzles oficiais e uma nova associação dígito ↔ unidade a cada partida.
+- As pistas iniciais usam `isGiven: true`; com um crédito de reposicionamento, podem ser movidas ou trocadas como qualquer outra unidade.
 - Uma classe não pode se repetir na mesma linha ou coluna, mas pode se repetir dentro da mesma região 3x3.
 - Colocação válida de uma nova peça concede `+1` Fúria; movimento, swap e tentativa inválida não concedem Fúria.
 - Herói: `100` HP máximo e inicial. Dragão: `500` HP máximo e inicial.
@@ -149,6 +164,7 @@ As três podem coexistir e são avaliadas independentemente.
 15. Ao criar uma mecânica, separe, quando necessário, regra/estado, apresentação e efeitos temporários.
 16. Não implemente vitória apenas porque o HP do Dragão pode chegar a zero; ela ainda não existe.
 17. Preserve alterações não relacionadas já presentes na árvore de trabalho.
+18. O puzzle, a solução e o mapeamento dígito ↔ unidade da partida pertencem a `NormalSudoku`; o conteúdo atual das células e `isGiven` pertencem a `BoardState`.
 
 ## Documentation Maintenance
 
