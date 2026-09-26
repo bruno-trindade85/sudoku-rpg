@@ -1,7 +1,7 @@
 import { GRID_SIZE, REGION_SIZE, type BoardUnit } from '../board/BoardState';
 import { UNIT_IDS, type UnitType } from '../units/UnitConfig';
 
-export type SynergyId = 'arcane-arrow' | 'tactical-maneuver' | 'natures-blessing';
+export type SynergyId = 'arcane-arrow' | 'tactical-maneuver' | 'natures-blessing' | 'shadow-convergence';
 
 export type SynergyDefinition = {
     id: SynergyId;
@@ -10,6 +10,7 @@ export type SynergyDefinition = {
     bonusDamage: number;
     repositionments: number;
     healing: number;
+    grantsRepeatAttack: boolean;
     feedbackText: string;
 };
 
@@ -28,6 +29,7 @@ const SYNERGY_DEFINITIONS: readonly SynergyDefinition[] = [
         bonusDamage: 10,
         repositionments: 0,
         healing: 0,
+        grantsRepeatAttack: false,
         feedbackText: '+10 DANO'
     },
     {
@@ -37,6 +39,7 @@ const SYNERGY_DEFINITIONS: readonly SynergyDefinition[] = [
         bonusDamage: 0,
         repositionments: 1,
         healing: 0,
+        grantsRepeatAttack: false,
         feedbackText: '+1 REPOSICIONAMENTO'
     },
     {
@@ -46,7 +49,18 @@ const SYNERGY_DEFINITIONS: readonly SynergyDefinition[] = [
         bonusDamage: 0,
         repositionments: 0,
         healing: 10,
+        grantsRepeatAttack: false,
         feedbackText: '+10 HP'
+    },
+    {
+        id: 'shadow-convergence',
+        name: 'Convergência Sombria',
+        unitTypes: [UNIT_IDS.darkSorcerer, UNIT_IDS.summoner],
+        bonusDamage: 0,
+        repositionments: 0,
+        healing: 0,
+        grantsRepeatAttack: true,
+        feedbackText: '+1 ATAQUE NA REGIÃO'
     }
 ];
 
@@ -157,6 +171,16 @@ export function getAllFormedSynergies(board: ReadonlyMap<number, BoardUnit>): Fo
     }
 
     return formedSynergies;
+}
+
+export function hasUnitTypeInRegion(
+    board: ReadonlyMap<number, BoardUnit>,
+    regionRow: number,
+    regionColumn: number,
+    unitType: UnitType
+): boolean {
+    return getRegionUnits(board, regionRow, regionColumn)
+        .some((entry) => entry.unit.type === unitType);
 }
 
 function getRegionUnits(

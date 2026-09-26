@@ -1,6 +1,7 @@
 import { Scene } from 'phaser';
 import {
     CHARACTER_TYPES,
+    UNIT_IDS,
     UNIT_SPRITE_FLIP_X,
     UNIT_TEXTURES,
     type CharacterType,
@@ -16,6 +17,7 @@ import {
 import {
     getAllFormedSynergies,
     getFormedSynergiesInRegion,
+    hasUnitTypeInRegion,
     type FormedSynergy,
     type SynergyDefinition
 } from '../synergies/SynergyManager';
@@ -145,6 +147,7 @@ export class Game extends Scene {
         this.updateHeroInterface();
         this.updateFuryInterface();
         this.updateRepositionInterface();
+        this.updateEvasionInterface();
         this.gameUI.updateCombatHistory(this.combatHistory);
         this.refreshSynergyIndicators();
 
@@ -656,6 +659,13 @@ export class Game extends Scene {
         this.gameUI.updateRepositionCredits(this.playerState.getRepositionCredits(), this.isRepositionMode);
     }
 
+    private updateEvasionInterface() {
+        this.gameUI.updateEvasionCharges(
+            this.playerState.getEvasionCharges(),
+            this.playerState.getMaxEvasionCharges()
+        );
+    }
+
     private increaseDragonFury() {
         if (this.playerState.isDefeated()) {
             return;
@@ -672,6 +682,14 @@ export class Game extends Scene {
 
     private performDragonAttack(damage: number) {
         if (this.playerState.isDefeated()) {
+            return;
+        }
+
+        if (this.playerState.consumeEvasionCharge()) {
+            this.updateEvasionInterface();
+            this.recordCombatEvent({ type: 'evasion' });
+            this.playEvasionEffect();
+            this.updateFuryInterface();
             return;
         }
 
@@ -767,7 +785,20 @@ export class Game extends Scene {
         this.tweens.add({ targets: this.gameUI.getHeroHpVisuals(), alpha: 0.25, duration: 80, yoyo: true, repeat: 1 });
     }
 
-    private handleRegionAttack(regionRow: number, regionColumn: number) {
+    private playEvasionEffect() {
+        const heroPanel = this.gameUI.getHeroPanel();
+        if (!heroPanel) {
+            return;
+        }
+
+        const evasionText = this.add.text(heroPanel.x, heroPanel.y + 30, 'EVASÃO!', {
+            fontFamily: 'Arial Black', fontSize: 24, color: '#c084fc', stroke: '#17191f', strokeThickness: 4
+        }).setOrigin(0.5).setDepth(100);
+        this.tweens.add({ targets: evasionText, y: evasionText.y - 28, alpha: 0, duration: 700, onComplete: () => evasionText.destroy() });
+        this.tweens.add({ targets: this.gameUI.getHeroHpVisuals(), alpha: 0.45, duration: 120, yoyo: true, repeat: 1 });
+    }
+
+    private handleRegionAttack(regionRow: number, regionColumn: number, isRepeatAttack = false) {
         if (this.playerState.isDefeated()) {
             return;
         }
@@ -775,15 +806,24 @@ export class Game extends Scene {
         // O ataque combina o dano-base da região com bônus das sinergias ativas.
         const formedSynergies = getFormedSynergiesInRegion(this.boardState.getCells(), regionRow, regionColumn);
         const activeSynergies = formedSynergies.map((formedSynergy) => formedSynergy.definition);
-        const synergyBonus = activeSynergies.reduce((total, synergy) => total + synergy.bonusDamage, 0);
+        // O reataque da Convergência Sombria usa somente o dano-base da região.
+        const synergyBonus = isRepeatAttack
+            ? 0
+            : activeSynergies.reduce((total, synergy) => total + synergy.bonusDamage, 0);
         const damage = this.combatManager.attackDragonFromRegion(synergyBonus);
 
         this.recordBossDamage(damage);
         this.updateBossInterface();
         this.showBossDamageFeedback(damage);
         this.playBossHitEffect();
-        this.applySynergyRewards(activeSynergies);
-        formedSynergies.forEach((formedSynergy, index) => this.playSynergyActivation(formedSynergy, index * 160));
+        if (!isRepeatAttack) {
+            this.applySynergyRewards(activeSynergies);
+            this.grantRogueEvasion(regionRow, regionColumn);
+        }
+        const activatedSynergies = isRepeatAttack
+            ? formedSynergies.filter((formedSynergy) => formedSynergy.definition.grantsRepeatAttack)
+            : formedSynergies;
+        activatedSynergies.forEach((formedSynergy, index) => this.playSynergyActivation(formedSynergy, index * 160));
     }
 
     private applySynergyRewards(synergies: SynergyDefinition[]) {
@@ -797,6 +837,19 @@ export class Game extends Scene {
 
         if (healingEarned > 0) {
             this.healHero(healingEarned);
+        }
+    }
+
+    private grantRogueEvasion(regionRow: number, regionColumn: number): void {
+        const hasRogue = hasUnitTypeInRegion(
+            this.boardState.getCells(),
+            regionRow,
+            regionColumn,
+            UNIT_IDS.rogue
+        );
+
+        if (hasRogue && this.playerState.addEvasionCharge()) {
+            this.updateEvasionInterface();
         }
     }
 
@@ -896,8 +949,10 @@ export class Game extends Scene {
                 this.playArcaneArrowEffect(pair);
             } else if (synergy.id === 'tactical-maneuver') {
                 this.playTacticalManeuverEffect(pair);
-            } else {
+            } else if (synergy.id === 'natures-blessing') {
                 this.playNaturesBlessingEffect(pair);
+            } else {
+                this.playShadowConvergenceEffect(pair);
             }
 
             this.showSynergyFeedback(synergy);
@@ -965,6 +1020,29 @@ export class Game extends Scene {
         if (heroPanel) {
             this.tweens.add({ targets: [heroPanel, ...this.gameUI.getHeroHpVisuals()], alpha: 0.55, duration: 110, yoyo: true, repeat: 1 });
         }
+    }
+
+    private playShadowConvergenceEffect(pair: readonly [number, number]) {
+        const darkSorcerer = this.pieceVisuals.get(pair[0]);
+        const summoner = this.pieceVisuals.get(pair[1]);
+
+        if (!darkSorcerer || !summoner) {
+            return;
+        }
+
+        this.tweens.add({
+            targets: [darkSorcerer.sprite, summoner.sprite],
+            scaleX: 2.55,
+            scaleY: 2.55,
+            duration: 140,
+            yoyo: true
+        });
+        const effect = this.add.graphics();
+        effect.lineStyle(4, 0xa855f7, 0.95);
+        effect.lineBetween(darkSorcerer.sprite.x, darkSorcerer.sprite.y, summoner.sprite.x, summoner.sprite.y);
+        effect.strokeCircle(darkSorcerer.sprite.x, darkSorcerer.sprite.y, 30);
+        effect.strokeCircle(summoner.sprite.x, summoner.sprite.y, 30);
+        this.fadeAndDestroy(effect, 520);
     }
 
     private playResourceGainEffect() {
@@ -1049,7 +1127,9 @@ export class Game extends Scene {
         const graphics = this.add.graphics().setDepth(20);
         const color = synergy.id === 'arcane-arrow'
             ? 0x9d81ff
-            : synergy.id === 'natures-blessing' ? 0x63d69b : 0xf0b429;
+            : synergy.id === 'natures-blessing'
+                ? 0x63d69b
+                : synergy.id === 'shadow-convergence' ? 0xa855f7 : 0xf0b429;
         const lineWidth = synergy.id === 'arcane-arrow' ? 2 : 3;
 
         // Realça discretamente o chão das duas células envolvidas na sinergia.
@@ -1098,14 +1178,25 @@ export class Game extends Scene {
         this.boardState.setRegionComplete(regionIndex, regionIsComplete);
         const regionState = this.boardState.getRegionState(regionIndex);
 
-        // Uma região ataca apenas uma vez, mesmo se for desfeita e completada novamente.
-        if (regionState.isCurrentlyComplete && !regionState.hasAttacked) {
-            this.boardState.markRegionAttacked(regionIndex);
-            this.handleRegionCompleted(regionRow, regionColumn, boardX, boardY);
+        const formedSynergies = getFormedSynergiesInRegion(this.boardState.getCells(), regionRow, regionColumn);
+        const canRepeatAttack = regionState.hasAttacked
+            && !regionState.hasUsedRepeatAttack
+            && formedSynergies.some((formedSynergy) => formedSynergy.definition.grantsRepeatAttack);
+        const isFirstAttack = !regionState.hasAttacked;
+
+        if (regionState.isCurrentlyComplete && (isFirstAttack || canRepeatAttack)) {
+            this.boardState.markRegionAttacked(regionIndex, canRepeatAttack);
+            this.handleRegionCompleted(regionRow, regionColumn, boardX, boardY, canRepeatAttack);
         }
     }
 
-    private handleRegionCompleted(regionRow: number, regionColumn: number, boardX: number, boardY: number) {
+    private handleRegionCompleted(
+        regionRow: number,
+        regionColumn: number,
+        boardX: number,
+        boardY: number,
+        isRepeatAttack: boolean
+    ) {
         const regionSize = REGION_SIZE * CELL_SIZE;
         const regionX = boardX + regionColumn * regionSize + regionSize / 2;
         const regionY = boardY + regionRow * regionSize + regionSize / 2;
@@ -1121,7 +1212,7 @@ export class Game extends Scene {
             repeat: 1
         });
 
-        this.events.emit('region-completed', regionRow, regionColumn);
+        this.events.emit('region-completed', regionRow, regionColumn, isRepeatAttack);
     }
 
 }

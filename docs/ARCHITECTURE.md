@@ -66,6 +66,7 @@ Estado próprio:
 - `isGiven` em cada unidade para identificar pistas iniciais;
 - `isCurrentlyComplete` por região;
 - `hasAttacked` por região.
+- `hasUsedRepeatAttack` por região, para limitar o efeito de reataque da Convergência Sombria.
 
 Operações principais:
 
@@ -108,6 +109,7 @@ Contém as definições lógicas das sinergias e seus resultados declarativos:
 | Flecha Arcana | Mago + Arqueiro | Adjacência ortogonal na mesma região | `bonusDamage: 10` |
 | Manobra Tática | Paladino + Bárbaro | Adjacência ortogonal na mesma região | `repositionments: 1` |
 | Bênção da Natureza | Clérigo + Druida | Adjacência ortogonal na mesma região | `healing: 10` |
+| Convergência Sombria | Feiticeiro Sombrio + Invocador | Adjacência ortogonal em região completa já atacada | Um segundo ataque da região |
 
 `areOrthogonallyAdjacent` centraliza a condição de distância de Manhattan igual a 1. `getFormedSynergiesInRegion` retorna todos os pares distintos possíveis para cada sinergia na região, escolhendo aleatoriamente entre parceiros ortogonalmente adjacentes quando houver alternativas; `getAllFormedSynergies` agrega as nove regiões para os indicadores visuais.
 
@@ -122,6 +124,7 @@ O módulo consulta dados lógicos derivados de `BoardState` e IDs de `UnitConfig
 - derrota quando HP é menor ou igual a zero;
 - créditos de reposicionamento, inicialmente `0`;
 - consumo unitário de crédito e reset.
+- uma carga máxima de Evasão, concedida pelo Ladino e consumida para anular o próximo ataque de Fúria.
 
 Não depende de outros módulos e não decide quando dano, cura ou recompensa acontece.
 
@@ -130,8 +133,8 @@ Não depende de outros módulos e não decide quando dano, cura ou recompensa ac
 É a fonte de verdade do combate do Dragão:
 
 - HP inicial e máximo de `500`, limitado a zero;
-- Fúria inicial `0` e máxima `5`;
-- quinta carga retorna `10` de dano ao Herói e reseta a Fúria;
+- Fúria inicial `0` e máxima `3`;
+- terceira carga retorna `10` de dano ao Herói e reseta a Fúria;
 - dano-base de região `50`;
 - cálculo e aplicação de `50 + synergyDamageBonus` ao Dragão;
 - reset do HP e da Fúria.
@@ -187,6 +190,7 @@ O mapa `pieceVisuals` associa células a objetos Phaser, mas não é a fonte de 
 | Validade de colocação, movimento, swap e região | `BoardValidator` |
 | Sinergias formadas e valores de seus efeitos | `SynergyManager` |
 | HP do Herói e derrota lógica | `PlayerState` |
+| Carga de Evasão | `PlayerState` |
 | Créditos de reposicionamento | `PlayerState` |
 | HP e Fúria do Dragão | `CombatManager` |
 | Dano-base de região e ataque normal do Dragão | `CombatManager` |
@@ -222,13 +226,16 @@ flowchart TD
     G --> H[Refresh synergy indicators from SynergyManager]
     H --> I[Placement animation]
     I --> J[CombatManager.increaseDragonFury]
-    J --> K{Fury reached 5?}
+    J --> K{Fury reached 3?}
     K -- No --> L[GameUI updates Fury]
     K -- Yes --> M[CombatManager resets Fury and returns 10 damage]
-    M --> N[PlayerState.damage]
-    N --> O[GameUI HP/Fury update and visual effects]
-    O --> P{Player defeated?}
-    P -- Yes --> Q[Block actions and GameUI.showDefeat]
+    M --> N{PlayerState has Evasion?}
+    N -- Yes --> O[Consume Evasion and prevent damage]
+    N -- No --> P[PlayerState.damage]
+    O --> Q[GameUI updates Fury and visual effects]
+    P --> Q
+    Q --> R{Player defeated?}
+    R -- Yes --> S[Block actions and GameUI.showDefeat]
 ```
 
 Both click placement and card drag end call the same `tryPlaceCharacter` method. Only this successful new-placement path calls `increaseDragonFury`.
@@ -268,21 +275,23 @@ flowchart TD
     L --> M[Game runs temporary synergy effects]
 ```
 
-`hasAttacked` is marked before the event is emitted. If movement later makes the region incomplete, that flag remains true, so recompleting it cannot reapply damage or rewards.
+`hasAttacked` is marked before the event is emitted. If movement later makes the region incomplete, that flag remains true, so recompleting it cannot reapply damage or rewards. A única exceção é a Convergência Sombria: uma vez por região, ela permite um segundo ataque quando seus dois personagens estão adjacentes. Esse reataque causa somente o dano-base fixo de `50`, sem bônus de dano, cura ou créditos.
 
 ### Dragon Attack Flow
 
 ```mermaid
 flowchart TD
     A[Successful new placement] --> B[CombatManager increases Fury]
-    B --> C{Fury equals 5?}
+    B --> C{Fury equals 3?}
     C -- No --> D[Return current Fury; no damage]
     C -- Yes --> E[Return heroDamage 10 and reset Fury to 0]
-    E --> F[Game calls PlayerState.damage]
-    F --> G[GameUI updates Hero HP and Fury]
-    G --> H[Game runs Dragon and damage effects]
-    H --> I{PlayerState.isDefeated?}
-    I -- Yes --> J[Disable interaction path and show defeat after feedback]
+    E --> F{PlayerState has Evasion?}
+    F -- Yes --> G[Consume Evasion and prevent damage]
+    F -- No --> H[Game calls PlayerState.damage]
+    G --> I[GameUI updates Fury and visual effects]
+    H --> I
+    I --> J{PlayerState.isDefeated?}
+    J -- Yes --> K[Disable interaction path and show defeat after feedback]
 ```
 
 ## Dependency Guidelines

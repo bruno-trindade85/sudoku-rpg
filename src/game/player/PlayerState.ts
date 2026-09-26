@@ -1,8 +1,10 @@
 const MAX_HERO_HP = 100;
+const MAX_EVASION_CHARGES = 1;
 
 export class PlayerState {
     private currentHeroHp = MAX_HERO_HP;
     private repositionCredits = 0;
+    private evasionCharges = 0;
 
     getCurrentHp(): number {
         return this.currentHeroHp;
@@ -45,8 +47,35 @@ export class PlayerState {
         return true;
     }
 
+    getEvasionCharges(): number {
+        return this.evasionCharges;
+    }
+
+    getMaxEvasionCharges(): number {
+        return MAX_EVASION_CHARGES;
+    }
+
+    addEvasionCharge(): boolean {
+        if (this.evasionCharges >= MAX_EVASION_CHARGES) {
+            return false;
+        }
+
+        this.evasionCharges++;
+        return true;
+    }
+
+    consumeEvasionCharge(): boolean {
+        if (this.evasionCharges === 0) {
+            return false;
+        }
+
+        this.evasionCharges--;
+        return true;
+    }
+
     reset(): void {
         this.currentHeroHp = MAX_HERO_HP;
         this.repositionCredits = 0;
+        this.evasionCharges = 0;
     }
 }

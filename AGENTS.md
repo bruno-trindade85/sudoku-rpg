@@ -24,6 +24,7 @@ Responsável por:
 - movimento e troca lógica de unidades;
 - consulta das células de uma região;
 - estados `isCurrentlyComplete` e `hasAttacked` das nove regiões;
+- estado `hasUsedRepeatAttack` que limita a uma reativação por região;
 - reset lógico do tabuleiro e das regiões;
 - dimensões estruturais 9x9 e 3x3.
 
@@ -71,6 +72,8 @@ Responsável por:
 - dano, cura, limite de HP e derrota lógica;
 - fonte de verdade dos créditos de reposicionamento;
 - adição, consulta, consumo e reset desses créditos.
+- fonte de verdade de uma carga máxima de Evasão;
+- ganho e consumo da Evasão que anula o próximo ataque da Fúria.
 
 Não é responsável por decidir quando uma recompensa ou ataque acontece, nem por UI.
 
@@ -127,7 +130,8 @@ Não adicione automaticamente novas regras de gameplay em `Game.ts`. Primeiro id
 - Uma classe não pode se repetir na mesma linha ou coluna, mas pode se repetir dentro da mesma região 3x3.
 - Colocação válida de uma nova peça concede `+1` Fúria; movimento, swap e tentativa inválida não concedem Fúria.
 - Herói: `100` HP máximo e inicial. Dragão: `500` HP máximo e inicial.
-- Fúria do Dragão: `0/5`; ao chegar a `5`, causa `10` de dano ao Herói e volta para `0`.
+- Fúria do Dragão: `0/3`; ao chegar a `3`, causa `10` de dano ao Herói e volta para `0`.
+- Ao completar uma região com Ladino, o Herói recebe `1` carga de Evasão, limitada a uma. A próxima Fúria máxima é anulada e consome a carga.
 - Região completa causa `50` de dano-base e só realiza seu ataque uma vez. `hasAttacked` persiste mesmo se a região ficar incompleta.
 - Reposicionamento válido ou swap consome exatamente um crédito. Tentativa inválida ou cancelamento não consome.
 - O jogo aceita colocação e reposicionamento por clique e drag-and-drop.
@@ -142,6 +146,7 @@ Uma mesma sinergia pode ser formada diversas vezes na região, desde que cada oc
 - **Flecha Arcana:** Mago + Arqueiro; `+10` de dano por par. Duas ocorrências adicionam `+20`, e o ataque total da região passa de `50` para `70`.
 - **Manobra Tática:** Paladino + Bárbaro; `+1` crédito de reposicionamento.
 - **Bênção da Natureza:** Clérigo + Druida; cura `10` HP, limitada ao máximo de `100`.
+- **Convergência Sombria:** Feiticeiro Sombrio + Invocador; quando ortogonalmente adjacentes numa região completa já atacada, permitem um segundo ataque de dano-base fixo de `50`. Não repete bônus de dano, cura nem créditos das demais sinergias.
 
 As três podem coexistir e são avaliadas independentemente.
 

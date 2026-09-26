@@ -11,6 +11,7 @@ export type BoardUnit = {
 export type RegionState = {
     isCurrentlyComplete: boolean;
     hasAttacked: boolean;
+    hasUsedRepeatAttack: boolean;
 };
 
 export type RegionCell = {
@@ -94,11 +95,12 @@ export class BoardState {
         }
     }
 
-    markRegionAttacked(regionIndex: number): void {
+    markRegionAttacked(regionIndex: number, isRepeatAttack = false): void {
         const regionState = this.regions.get(regionIndex);
 
         if (regionState) {
             regionState.hasAttacked = true;
+            regionState.hasUsedRepeatAttack ||= isRepeatAttack;
         }
     }
 
@@ -107,7 +109,11 @@ export class BoardState {
         this.regions.clear();
 
         for (let regionIndex = 0; regionIndex < REGION_SIZE * REGION_SIZE; regionIndex++) {
-            this.regions.set(regionIndex, { isCurrentlyComplete: false, hasAttacked: false });
+            this.regions.set(regionIndex, {
+                isCurrentlyComplete: false,
+                hasAttacked: false,
+                hasUsedRepeatAttack: false
+            });
         }
     }
 }

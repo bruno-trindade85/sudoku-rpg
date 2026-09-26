@@ -29,7 +29,8 @@ const HUD_LAYOUT = {
 export type CombatHistoryEvent =
     | { type: 'damage'; amount: number }
     | { type: 'healing'; amount: number }
-    | { type: 'reposition' };
+    | { type: 'reposition' }
+    | { type: 'evasion' };
 
 export class GameUI {
     private dragonHpText?: Phaser.GameObjects.Text;
@@ -43,6 +44,7 @@ export class GameUI {
     private repositionText?: Phaser.GameObjects.Text;
     private repositionButton?: Phaser.GameObjects.Rectangle;
     private repositionButtonText?: Phaser.GameObjects.Text;
+    private evasionText?: Phaser.GameObjects.Text;
 
     constructor(private readonly scene: Scene) {}
 
@@ -79,6 +81,10 @@ export class GameUI {
         this.repositionText?.setText(`Reposicionamentos: ${amount}`);
         this.repositionButton?.setFillStyle(isRepositionMode ? COLORS.repositionActive : COLORS.button);
         this.repositionButtonText?.setText(isRepositionMode ? 'Cancelar reposicionamento' : 'Reposicionar');
+    }
+
+    updateEvasionCharges(amount: number, maximumAmount: number): void {
+        this.evasionText?.setText(`Evasão: ${amount} / ${maximumAmount}`);
     }
 
     updateCombatHistory(combatHistory: readonly CombatHistoryEvent[]): void {
@@ -192,6 +198,9 @@ export class GameUI {
         }).setOrigin(1, 0);
         this.scene.add.rectangle(hpBarX, hpBarY, 263, 11, COLORS.hpBackground).setOrigin(0, 0.5);
         this.heroHpBar = this.scene.add.rectangle(hpBarX, hpBarY, 263, 11, COLORS.heroHp).setOrigin(0, 0.5);
+        this.evasionText = this.scene.add.text(panelX - 132, panelY + 46, '', {
+            fontFamily: 'Arial', fontSize: 18, color: '#c084fc'
+        });
     }
 
     private createDamageHistory(panelX: number, panelY: number): void {
@@ -224,6 +233,10 @@ function getCombatEventPresentation(event: CombatHistoryEvent): { text: string; 
 
     if (event.type === 'healing') {
         return { text: `+${event.amount} HP`, color: '#63d69b' };
+    }
+
+    if (event.type === 'evasion') {
+        return { text: 'Ataque do Dragão evitado', color: '#c084fc' };
     }
 
     return { text: 'Reposicionamento usado', color: '#8fd3ff' };
