@@ -564,4 +564,70 @@ Os seguintes sistemas ainda serão detalhados durante o desenvolvimento:
 
 ---
 
+# 23. Medidas Oficiais do Tabuleiro
+
+As artes personalizadas do tabuleiro devem seguir as medidas atualmente utilizadas pela cena principal do jogo.
+
+| Elemento | Medida |
+|---|---:|
+| Canvas do jogo | **1920 × 1080 px** |
+| Grade lógica | **9 × 9** |
+| Tabuleiro completo | **828 × 828 px** |
+| Cada célula | **92 × 92 px** |
+| Cada região 3×3 | **276 × 276 px** |
+| Linhas internas das células | **2 px** |
+| Linhas principais das regiões 3×3 | **5 px** |
+
+### Coordenadas das divisões
+
+Para criar uma arte que se encaixe exatamente no grid, as divisões verticais e horizontais devem ocorrer em:
+
+```text
+0
+92
+184
+276
+368
+460
+552
+644
+736
+828
+```
+
+As divisões principais dos blocos 3×3 ficam em:
+
+```text
+0
+276
+552
+828
+```
+
+### Posição do tabuleiro no canvas 1920×1080
+
+O tabuleiro é centralizado horizontalmente e deslocado 45 px para cima em relação ao centro vertical.
+
+```text
+X inicial: 546 px
+Y inicial: 81 px
+X final: 1374 px
+Y final: 909 px
+```
+
+### Padrão para criação de novos tabuleiros
+
+Ao criar somente a arte do tabuleiro, utilizar preferencialmente:
+
+```text
+Tamanho: 828 × 828 px
+Grade: 9 × 9
+Célula: 92 × 92 px
+Região 3×3: 276 × 276 px
+```
+
+Esse padrão deve ser mantido nos backgrounds/tabuleiros personalizados para garantir alinhamento com as zonas interativas e com as unidades posicionadas pelo Phaser.
+
+---
+
 > **Nota de desenvolvimento:** Este documento representa o estado atual do design e deverá ser atualizado conforme as mecânicas forem testadas e validadas durante o desenvolvimento do MVP.
