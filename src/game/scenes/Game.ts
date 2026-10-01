@@ -23,7 +23,7 @@ import {
 } from '../synergies/SynergyManager';
 import { PlayerState } from '../player/PlayerState';
 import { CombatManager } from '../combat/CombatManager';
-import { GameUI, type CombatHistoryEvent } from '../ui/GameUI';
+import { GameUI } from '../ui/GameUI';
 import { createNormalSudokuState, type GameSudokuState } from '../sudoku/NormalSudoku';
 
 const GAME_WIDTH = 1920;
@@ -77,7 +77,6 @@ export class Game extends Scene {
     private sudokuState!: GameSudokuState;
     private backgroundTextureKey?: string;
     private gameUI!: GameUI;
-    private combatHistory: CombatHistoryEvent[] = [];
     private isRepositionMode = false;
     private repositionSourceCell?: number;
     private boardX = 0;
@@ -100,7 +99,7 @@ export class Game extends Scene {
         CHARACTER_TYPES.forEach((character) => {
             this.load.image(UNIT_TEXTURES[character.id], `assets/units/${UNIT_TEXTURES[character.id]}.png`);
         });
-        this.load.image('dragon', 'assets/enemies/dragon.png');
+        this.load.image('dragon', 'assets/enemies/dragon-new.png');
     }
 
     create() {
@@ -134,7 +133,6 @@ export class Game extends Scene {
         this.sudokuState = createNormalSudokuState(CHARACTER_TYPES.map((character) => character.id));
         this.playerState.reset();
         this.combatManager.reset();
-        this.combatHistory = [];
         this.isRepositionMode = false;
         this.repositionSourceCell = undefined;
         this.events.off('region-completed', this.handleRegionAttack, this);
@@ -148,7 +146,6 @@ export class Game extends Scene {
         this.updateFuryInterface();
         this.updateRepositionInterface();
         this.updateEvasionInterface();
-        this.gameUI.updateCombatHistory(this.combatHistory);
         this.refreshSynergyIndicators();
 
         graphics.fillStyle(COLORS.board, 0.13);
@@ -427,7 +424,6 @@ export class Game extends Scene {
         this.movePieceVisual(movingCharacter, { x: targetX, y: targetY });
         this.playerState.consumeRepositionCredit();
         this.updateRepositionInterface();
-        this.recordCombatEvent({ type: 'reposition' });
         this.updateRegionState(targetRowAtSource, targetColumnAtSource, this.boardX, this.boardY);
         this.updateRegionState(targetRow, targetColumn, this.boardX, this.boardY);
         this.refreshSynergyIndicators();
@@ -687,7 +683,6 @@ export class Game extends Scene {
 
         if (this.playerState.consumeEvasionCharge()) {
             this.updateEvasionInterface();
-            this.recordCombatEvent({ type: 'evasion' });
             this.playEvasionEffect();
             this.updateFuryInterface();
             return;
@@ -812,7 +807,6 @@ export class Game extends Scene {
             : activeSynergies.reduce((total, synergy) => total + synergy.bonusDamage, 0);
         const damage = this.combatManager.attackDragonFromRegion(synergyBonus);
 
-        this.recordBossDamage(damage);
         this.updateBossInterface();
         this.showBossDamageFeedback(damage);
         this.playBossHitEffect();
@@ -854,23 +848,9 @@ export class Game extends Scene {
     }
 
     private healHero(amount: number) {
-        const hpBeforeHealing = this.playerState.getCurrentHp();
         this.playerState.heal(amount);
-        const healedAmount = this.playerState.getCurrentHp() - hpBeforeHealing;
         this.updateHeroInterface();
 
-        if (healedAmount > 0) {
-            this.recordCombatEvent({ type: 'healing', amount: healedAmount });
-        }
-    }
-
-    private recordBossDamage(amount: number) {
-        this.recordCombatEvent({ type: 'damage', amount });
-    }
-
-    private recordCombatEvent(event: CombatHistoryEvent) {
-        this.combatHistory.push(event);
-        this.gameUI.updateCombatHistory(this.combatHistory);
     }
 
     private updateBossInterface() {

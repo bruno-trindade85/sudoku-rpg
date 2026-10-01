@@ -1,4 +1,6 @@
 import type { Scene } from 'phaser';
+import { SYNERGY_DEFINITIONS } from '../synergies/SynergyManager';
+import { CHARACTER_TYPES, UNIT_IDS, UNIT_SPRITE_FLIP_X, UNIT_TEXTURES } from '../units/UnitConfig';
 
 const COLORS = {
     bossHp: 0xd94d54,
@@ -19,18 +21,12 @@ const HUD_LAYOUT = {
     panelHeight: 504,
     repositionPanelX: 178,
     repositionPanelY: 167,
-    damageHistoryX: 178,
-    damageHistoryY: 340,
+    synergyGuideX: 178,
+    synergyGuideY: 490,
     heroPanelX: 178,
     heroPanelY: 74,
-    dragonOffsetFromBoard: 145
+    dragonOffsetFromBoard: 185
 };
-
-export type CombatHistoryEvent =
-    | { type: 'damage'; amount: number }
-    | { type: 'healing'; amount: number }
-    | { type: 'reposition' }
-    | { type: 'evasion' };
 
 export class GameUI {
     private dragonHpText?: Phaser.GameObjects.Text;
@@ -40,7 +36,6 @@ export class GameUI {
     private heroHpBar?: Phaser.GameObjects.Rectangle;
     private heroPanel?: Phaser.GameObjects.Rectangle;
     private furyText?: Phaser.GameObjects.Text;
-    private combatHistoryTexts: Phaser.GameObjects.Text[] = [];
     private repositionText?: Phaser.GameObjects.Text;
     private repositionButton?: Phaser.GameObjects.Rectangle;
     private repositionButtonText?: Phaser.GameObjects.Text;
@@ -55,7 +50,7 @@ export class GameUI {
         this.createDragonInterface(dragonPanelX, dragonPanelY);
         this.createLeftHudPanel();
         this.createHeroInterface(HUD_LAYOUT.heroPanelX, HUD_LAYOUT.heroPanelY);
-        this.createDamageHistory(HUD_LAYOUT.damageHistoryX, HUD_LAYOUT.damageHistoryY);
+        this.createSynergyGuide(HUD_LAYOUT.synergyGuideX, HUD_LAYOUT.synergyGuideY);
         this.createRepositionInterface(onRepositionRequest);
     }
 
@@ -85,26 +80,6 @@ export class GameUI {
 
     updateEvasionCharges(amount: number, maximumAmount: number): void {
         this.evasionText?.setText(`Evasão: ${amount} / ${maximumAmount}`);
-    }
-
-    updateCombatHistory(combatHistory: readonly CombatHistoryEvent[]): void {
-        this.combatHistoryTexts.forEach((text) => text.destroy());
-        this.combatHistoryTexts = [];
-
-        const recentEvents = combatHistory.slice(-5);
-        if (recentEvents.length === 0) {
-            this.combatHistoryTexts.push(this.scene.add.text(HUD_LAYOUT.damageHistoryX - 132, HUD_LAYOUT.damageHistoryY - 70, 'Nenhum evento.', {
-                fontFamily: 'Arial', fontSize: 20, color: '#ffffff'
-            }));
-            return;
-        }
-
-        recentEvents.forEach((event, index) => {
-            const presentation = getCombatEventPresentation(event);
-            this.combatHistoryTexts.push(this.scene.add.text(HUD_LAYOUT.damageHistoryX - 132, HUD_LAYOUT.damageHistoryY - 70 + index * 36, presentation.text, {
-                fontFamily: 'Arial', fontSize: 20, color: presentation.color
-            }));
-        });
     }
 
     showDefeat(onRestart: () => void): void {
@@ -155,18 +130,19 @@ export class GameUI {
 
     private createDragonInterface(panelX: number, panelY: number): void {
         const hpBarX = panelX - 95;
-        const hpBarY = panelY + 126;
+        const hpBarY = panelY + 210;
 
         this.dragonAvatar = this.scene.add.image(panelX, panelY, 'dragon')
-            .setScale(2)
+            // A 3x3 board region is 3 × 92px = 276px on each side.
+            .setDisplaySize(276, 276)
             .setFlipX(true);
-        this.furyText = this.scene.add.text(panelX, panelY - 88, '', {
+        this.furyText = this.scene.add.text(panelX, panelY - 166, '', {
             fontFamily: 'Arial Black', fontSize: 20, color: '#f0b429', stroke: '#17191f', strokeThickness: 3
         }).setOrigin(0.5);
-        this.scene.add.text(panelX, panelY + 76, 'Dragão', {
+        this.scene.add.text(panelX, panelY + 162, 'Dragão', {
             fontFamily: 'Arial Black', fontSize: 23, color: '#ffffff', stroke: '#17191f', strokeThickness: 3
         }).setOrigin(0.5);
-        this.dragonHpText = this.scene.add.text(panelX, panelY + 100, '', {
+        this.dragonHpText = this.scene.add.text(panelX, panelY + 186, '', {
             fontFamily: 'Arial', fontSize: 19, color: '#ffffff', stroke: '#17191f', strokeThickness: 3
         }).setOrigin(0.5);
         this.scene.add.rectangle(hpBarX, hpBarY, 190, 10, COLORS.hpBackground).setOrigin(0, 0.5);
@@ -203,10 +179,55 @@ export class GameUI {
         });
     }
 
-    private createDamageHistory(panelX: number, panelY: number): void {
-        this.scene.add.rectangle(panelX, panelY - 123, 274, 1, 0x667080, 0.35);
-        this.scene.add.text(panelX - 132, panelY - 106, 'HISTÓRICO DE COMBATE', {
-            fontFamily: 'Arial Black', fontSize: 20, color: '#ffffff'
+    private createSynergyGuide(panelX: number, panelY: number): void {
+        const guideWidth = 333;
+        const guideHeight = 480;
+
+        this.scene.add.rectangle(panelX, panelY, guideWidth, guideHeight, COLORS.panel, 0.92)
+            .setStrokeStyle(1, 0x667080, 0.6);
+        this.scene.add.text(panelX, panelY - 180, 'SINERGIAS', {
+            fontFamily: 'Arial Black', fontSize: 24, color: '#ffffff'
+        }).setOrigin(0.5);
+        this.scene.add.text(panelX, panelY - 151, 'Pares adjacentes e bônus de região', {
+            fontFamily: 'Arial', fontSize: 15, color: '#b9c2d0'
+        }).setOrigin(0.5);
+
+        SYNERGY_DEFINITIONS.forEach((synergy, index) => {
+            const rowY = panelY - 105 + index * 78;
+            const [firstUnit, secondUnit] = synergy.unitTypes;
+            const firstName = CHARACTER_TYPES.find((unit) => unit.id === firstUnit)?.name ?? firstUnit;
+            const secondName = CHARACTER_TYPES.find((unit) => unit.id === secondUnit)?.name ?? secondUnit;
+
+            this.scene.add.rectangle(panelX, rowY, guideWidth - 28, 66, 0x252b37, 0.72)
+                .setStrokeStyle(1, 0x667080, 0.28);
+            this.scene.add.image(panelX - 126, rowY, UNIT_TEXTURES[firstUnit])
+                .setDisplaySize(42, 42)
+                .setFlipX(UNIT_SPRITE_FLIP_X[firstUnit]);
+            this.scene.add.text(panelX - 98, rowY, '+', {
+                fontFamily: 'Arial Black', fontSize: 20, color: '#f0b429'
+            }).setOrigin(0.5);
+            this.scene.add.image(panelX - 70, rowY, UNIT_TEXTURES[secondUnit])
+                .setDisplaySize(42, 42)
+                .setFlipX(UNIT_SPRITE_FLIP_X[secondUnit]);
+            this.scene.add.text(panelX - 38, rowY - 17, `${firstName} + ${secondName}`, {
+                fontFamily: 'Arial Black', fontSize: 15, color: '#ffffff'
+            });
+            this.scene.add.text(panelX - 38, rowY + 8, synergy.feedbackText, {
+                fontFamily: 'Arial Black', fontSize: 15, color: '#f0b429'
+            });
+        });
+
+        const rogueRowY = panelY - 105 + SYNERGY_DEFINITIONS.length * 78;
+        this.scene.add.rectangle(panelX, rogueRowY, guideWidth - 28, 66, 0x2b2637, 0.8)
+            .setStrokeStyle(1, 0xc084fc, 0.45);
+        this.scene.add.image(panelX - 98, rogueRowY, UNIT_TEXTURES[UNIT_IDS.rogue])
+            .setDisplaySize(42, 42)
+            .setFlipX(UNIT_SPRITE_FLIP_X[UNIT_IDS.rogue]);
+        this.scene.add.text(panelX - 62, rogueRowY - 17, 'Ladino na região completa', {
+            fontFamily: 'Arial Black', fontSize: 15, color: '#ffffff'
+        });
+        this.scene.add.text(panelX - 62, rogueRowY + 8, 'EVASÃO: evita o próximo ataque', {
+            fontFamily: 'Arial Black', fontSize: 15, color: '#c084fc'
         });
     }
 
@@ -224,20 +245,4 @@ export class GameUI {
         }).setOrigin(0.5);
         this.repositionButton.on('pointerdown', onRepositionRequest);
     }
-}
-
-function getCombatEventPresentation(event: CombatHistoryEvent): { text: string; color: string } {
-    if (event.type === 'damage') {
-        return { text: `-${event.amount} HP`, color: '#ff6b6b' };
-    }
-
-    if (event.type === 'healing') {
-        return { text: `+${event.amount} HP`, color: '#63d69b' };
-    }
-
-    if (event.type === 'evasion') {
-        return { text: 'Ataque do Dragão evitado', color: '#c084fc' };
-    }
-
-    return { text: 'Reposicionamento usado', color: '#8fd3ff' };
 }

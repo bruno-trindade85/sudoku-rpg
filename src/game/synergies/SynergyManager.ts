@@ -21,7 +21,7 @@ export type FormedSynergy = {
     regionColumn: number;
 };
 
-const SYNERGY_DEFINITIONS: readonly SynergyDefinition[] = [
+export const SYNERGY_DEFINITIONS: readonly SynergyDefinition[] = [
     {
         id: 'arcane-arrow',
         name: 'Flecha Arcana',

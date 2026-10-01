@@ -151,7 +151,7 @@ Cria e atualiza:
 - Fúria;
 - nome, HP e barra do Herói;
 - reposicionamentos e botão correspondente;
-- histórico de combate;
+- guia visual de sinergias;
 - overlay de derrota e botão de reinício.
 
 Todos os valores são recebidos por parâmetro. Os callbacks de reposicionamento e reinício informam intenção a `Game`; `GameUI` não altera estado lógico.
@@ -170,7 +170,6 @@ Responsabilidades ainda presentes:
 - modo de reposicionamento e sua seleção de origem;
 - transição de completude da região e emissão/escuta de `region-completed`;
 - aplicação de cura e créditos retornados pelas sinergias;
-- lista de eventos reais de combate (dano, cura e reposicionamento); a apresentação fica em `GameUI`;
 - coordenação da derrota e do reinício via `scene.restart()`;
 - todos os efeitos temporários: pulsos, shakes, flashes, textos flutuantes, linhas de sinergia e animações de ataque/dano.
 
@@ -196,7 +195,6 @@ O mapa `pieceVisuals` associa células a objetos Phaser, mas não é a fonte de 
 | Dano-base de região e ataque normal do Dragão | `CombatManager` |
 | Objetos e valores exibidos no HUD | `GameUI` recebe valores; não é fonte lógica |
 | Objetos visuais das peças e efeitos temporários | `Game` |
-| Valores exibidos no histórico de combate | lista de eventos em `Game`; renderização em `GameUI` |
 
 ## Main Game Flows
 
