@@ -157,8 +157,8 @@ const MAGIC_CIRCLE_PATHS = [
     'assets/vfx/magic_circle/magic_circle_3.png'
 ] as const;
 const MAGIC_CIRCLE_FRAME_MS = 140;
-const MAGIC_CIRCLE_SCALE = 4;
-const MAGIC_CIRCLE_Y_OFFSET = 18;
+const MAGIC_CIRCLE_SCALE = 2.25;
+const MAGIC_CIRCLE_Y_OFFSET = 8;
 const MAGIC_CIRCLE_DEPTH = 9;
 
 type BoardPiece = {
