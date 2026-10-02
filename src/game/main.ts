@@ -2,13 +2,41 @@ import { Game as MainGame } from './scenes/Game';
 import { AUTO, Game, Scale, Types } from 'phaser';
 import { UNIT_IDS, type CharacterType, type UnitType } from './units/UnitConfig';
 
-const ARCHER_IDLE_TEXTURES = [
-    'archer-idle-down-0',
-    'archer-idle-down-1',
-    'archer-idle-down-2'
-] as const;
-const ARCHER_IDLE_FRAME_MS = 180;
-const ARCHER_BOARD_SCALE = 4;
+const BOARD_IDLE_CONFIG: Partial<Record<UnitType, {
+    textures: readonly string[];
+    paths: readonly string[];
+    frameMs: number;
+    scale: number;
+}>> = {
+    [UNIT_IDS.archer]: {
+        textures: [
+            'archer-idle-down-0',
+            'archer-idle-down-1',
+            'archer-idle-down-2'
+        ],
+        paths: [
+            'assets/units/archer/archer_down_0.png',
+            'assets/units/archer/archer_down_1.png',
+            'assets/units/archer/archer_down_2.png'
+        ],
+        frameMs: 180,
+        scale: 4
+    },
+    [UNIT_IDS.mage]: {
+        textures: [
+            'mage-idle-down-0',
+            'mage-idle-down-1',
+            'mage-idle-down-2'
+        ],
+        paths: [
+            'assets/units/mage/mage_down_0.png',
+            'assets/units/mage/mage_down_1.png',
+            'assets/units/mage/mage_down_2.png'
+        ],
+        frameMs: 180,
+        scale: 4
+    }
+};
 
 type BoardPiece = {
     type: UnitType;
@@ -22,13 +50,13 @@ type MainGamePrototype = {
 };
 
 /**
- * Teste de idle do arqueiro.
+ * Idle de unidades no tabuleiro.
  *
- * Os três frames são carregados separadamente e a troca de textura só é
- * iniciada dentro de placeCharacter(), ou seja: o card do arqueiro continua
- * estático e a animação começa apenas quando o arqueiro entra no tabuleiro.
+ * Os frames são carregados separadamente e o loop só é iniciado dentro de
+ * placeCharacter(). Assim, os cards continuam estáticos e a animação aparece
+ * apenas quando a unidade realmente entra no tabuleiro.
  */
-const installArcherBoardIdle = () => {
+const installBoardIdleAnimations = () => {
     const prototype = MainGame.prototype as unknown as MainGamePrototype;
     const originalPreload = prototype.preload;
     const originalPlaceCharacter = prototype.placeCharacter;
@@ -36,9 +64,16 @@ const installArcherBoardIdle = () => {
 
     prototype.preload = function (this: MainGame) {
         originalPreload.call(this);
-        this.load.image(ARCHER_IDLE_TEXTURES[0], 'assets/units/archer/archer_down_0.png');
-        this.load.image(ARCHER_IDLE_TEXTURES[1], 'assets/units/archer/archer_down_1.png');
-        this.load.image(ARCHER_IDLE_TEXTURES[2], 'assets/units/archer/archer_down_2.png');
+
+        Object.values(BOARD_IDLE_CONFIG).forEach((config) => {
+            if (!config) {
+                return;
+            }
+
+            config.textures.forEach((texture, index) => {
+                this.load.image(texture, config.paths[index]);
+            });
+        });
     };
 
     prototype.placeCharacter = function (
@@ -48,18 +83,19 @@ const installArcherBoardIdle = () => {
         y: number
     ): BoardPiece {
         const piece = originalPlaceCharacter.call(this, character, x, y);
+        const idleConfig = BOARD_IDLE_CONFIG[character.id];
 
-        if (character.id !== UNIT_IDS.archer) {
+        if (!idleConfig) {
             return piece;
         }
 
         let frameIndex = 0;
         piece.sprite
-            .setTexture(ARCHER_IDLE_TEXTURES[frameIndex])
-            .setScale(ARCHER_BOARD_SCALE);
+            .setTexture(idleConfig.textures[frameIndex])
+            .setScale(idleConfig.scale);
 
         const idleTimer = this.time.addEvent({
-            delay: ARCHER_IDLE_FRAME_MS,
+            delay: idleConfig.frameMs,
             loop: true,
             callback: () => {
                 if (!piece.sprite.active) {
@@ -67,8 +103,8 @@ const installArcherBoardIdle = () => {
                     return;
                 }
 
-                frameIndex = (frameIndex + 1) % ARCHER_IDLE_TEXTURES.length;
-                piece.sprite.setTexture(ARCHER_IDLE_TEXTURES[frameIndex]);
+                frameIndex = (frameIndex + 1) % idleConfig.textures.length;
+                piece.sprite.setTexture(idleConfig.textures[frameIndex]);
             }
         });
 
@@ -77,10 +113,11 @@ const installArcherBoardIdle = () => {
     };
 
     // A animação de invocação original termina na escala padrão das unidades.
-    // Para o arqueiro 16x16, usamos uma escala maior para manter proporção visual
-    // semelhante aos demais personagens do tabuleiro.
+    // Para as unidades 16x16 com idle próprio, preservamos a escala configurada.
     prototype.playSummonAnimation = function (this: MainGame, piece: BoardPiece) {
-        if (piece.type !== UNIT_IDS.archer) {
+        const idleConfig = BOARD_IDLE_CONFIG[piece.type];
+
+        if (!idleConfig) {
             originalPlaySummonAnimation.call(this, piece);
             return;
         }
@@ -93,21 +130,21 @@ const installArcherBoardIdle = () => {
 
         this.tweens.add({
             targets: piece.sprite,
-            scaleX: ARCHER_BOARD_SCALE,
-            scaleY: ARCHER_BOARD_SCALE,
+            scaleX: idleConfig.scale,
+            scaleY: idleConfig.scale,
             duration: 180,
             onComplete: () => {
                 piece.sprite
                     .setVisible(true)
                     .setAlpha(1)
                     .setDepth(10)
-                    .setScale(ARCHER_BOARD_SCALE);
+                    .setScale(idleConfig.scale);
             }
         });
     };
 };
 
-installArcherBoardIdle();
+installBoardIdleAnimations();
 
 // Find out more information about the Game Config at:
 // https://docs.phaser.io/api-documentation/typedef/types-core#gameconfig
