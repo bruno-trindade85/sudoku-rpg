@@ -2,6 +2,7 @@ import { Game as MainGame } from './scenes/Game';
 import { AUTO, Game, Scale, Types } from 'phaser';
 import { UNIT_IDS, type CharacterType, type UnitType } from './units/UnitConfig';
 import { getAllFormedSynergies } from './synergies/SynergyManager';
+import type { BoardUnit } from './board/BoardState';
 
 const BOARD_IDLE_CONFIG: Partial<Record<UnitType, {
     textures: readonly string[];
@@ -171,9 +172,9 @@ type MagicCircleEffect = {
     regionKey: string;
 };
 
-type MainGameRuntime = MainGame & {
+type MainGameRuntime = {
     boardState: {
-        getCells: () => ReadonlyMap<number, { type: UnitType }>;
+        getCells: () => ReadonlyMap<number, BoardUnit>;
     };
     pieceVisuals: Map<number, BoardPiece>;
 };
@@ -204,7 +205,7 @@ const clearMagicCircleEffects = (scene: MainGame) => {
 };
 
 const syncArcaneArrowMagicCircles = (scene: MainGame) => {
-    const runtime = scene as MainGameRuntime;
+    const runtime = scene as unknown as MainGameRuntime;
     const effects = magicCircleEffects.get(scene) ?? new Map<number, MagicCircleEffect>();
     const blockedRegions = attackedRegions.get(scene) ?? new Set<string>();
     const activeCells = new Map<number, string>();
