@@ -157,8 +157,8 @@ const MAGIC_CIRCLE_PATHS = [
     'assets/vfx/magic_circle/magic_circle_3.png'
 ] as const;
 const MAGIC_CIRCLE_FRAME_MS = 140;
-const MAGIC_CIRCLE_SCALE = 2.25;
-const MAGIC_CIRCLE_Y_OFFSET = 8;
+const MAGIC_CIRCLE_SIZE = 84;
+const MAGIC_CIRCLE_Y_OFFSET = 4;
 const MAGIC_CIRCLE_DEPTH = 9;
 
 type BoardPiece = {
@@ -239,7 +239,9 @@ const syncArcaneArrowMagicCircles = (scene: MainGame) => {
         const existing = effects.get(cellIndex);
         if (existing) {
             existing.regionKey = regionKey;
-            existing.sprite.setPosition(piece.sprite.x, piece.sprite.y + MAGIC_CIRCLE_Y_OFFSET);
+            existing.sprite
+                .setPosition(piece.sprite.x, piece.sprite.y + MAGIC_CIRCLE_Y_OFFSET)
+                .setDisplaySize(MAGIC_CIRCLE_SIZE, MAGIC_CIRCLE_SIZE);
             return;
         }
 
@@ -249,7 +251,7 @@ const syncArcaneArrowMagicCircles = (scene: MainGame) => {
             piece.sprite.y + MAGIC_CIRCLE_Y_OFFSET,
             MAGIC_CIRCLE_TEXTURES[frameIndex]
         )
-            .setScale(MAGIC_CIRCLE_SCALE)
+            .setDisplaySize(MAGIC_CIRCLE_SIZE, MAGIC_CIRCLE_SIZE)
             .setDepth(MAGIC_CIRCLE_DEPTH);
 
         const timer = scene.time.addEvent({
@@ -262,7 +264,9 @@ const syncArcaneArrowMagicCircles = (scene: MainGame) => {
                 }
 
                 frameIndex = (frameIndex + 1) % MAGIC_CIRCLE_TEXTURES.length;
-                sprite.setTexture(MAGIC_CIRCLE_TEXTURES[frameIndex]);
+                sprite
+                    .setTexture(MAGIC_CIRCLE_TEXTURES[frameIndex])
+                    .setDisplaySize(MAGIC_CIRCLE_SIZE, MAGIC_CIRCLE_SIZE);
             }
         });
 
