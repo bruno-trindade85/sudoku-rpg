@@ -119,6 +119,20 @@ const BOARD_IDLE_CONFIG: Partial<Record<UnitType, {
         ],
         frameMs: 180,
         scale: 4
+    },
+    [UNIT_IDS.summoner]: {
+        textures: [
+            'villager-idle-down-0',
+            'villager-idle-down-1',
+            'villager-idle-down-2'
+        ],
+        paths: [
+            'assets/units/villager/villager_down_0.png',
+            'assets/units/villager/villager_down_1.png',
+            'assets/units/villager/villager_down_2.png'
+        ],
+        frameMs: 180,
+        scale: 4
     }
 };
 
