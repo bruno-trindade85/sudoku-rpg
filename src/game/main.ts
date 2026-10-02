@@ -105,6 +105,20 @@ const BOARD_IDLE_CONFIG: Partial<Record<UnitType, {
         ],
         frameMs: 180,
         scale: 4
+    },
+    [UNIT_IDS.darkSorcerer]: {
+        textures: [
+            'necromancer-idle-down-0',
+            'necromancer-idle-down-1',
+            'necromancer-idle-down-2'
+        ],
+        paths: [
+            'assets/units/necromancer/necromancer_down_0.png',
+            'assets/units/necromancer/necromancer_down_1.png',
+            'assets/units/necromancer/necromancer_down_2.png'
+        ],
+        frameMs: 180,
+        scale: 4
     }
 };
 
