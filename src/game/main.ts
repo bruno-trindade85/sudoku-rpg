@@ -136,14 +136,6 @@ const BOARD_IDLE_CONFIG: Partial<Record<UnitType, {
     }
 };
 
-const BOARD_TILE_TEXTURE = 'forest-mossy-stone-board-tile';
-const BOARD_TILE_PATH = 'assets/tilesets/Forest/forest_mossy_stone.png';
-const BOARD_GRID_SIZE = 9;
-const BOARD_CELL_SIZE = 92;
-const BOARD_PIXEL_SIZE = BOARD_GRID_SIZE * BOARD_CELL_SIZE;
-const BOARD_TILE_X = (1920 - BOARD_PIXEL_SIZE) / 2;
-const BOARD_TILE_Y = (1080 - BOARD_PIXEL_SIZE) / 2 - 45;
-
 type BoardPiece = {
     type: UnitType;
     sprite: Phaser.GameObjects.Image;
@@ -151,7 +143,6 @@ type BoardPiece = {
 
 type MainGamePrototype = {
     preload: (this: MainGame) => void;
-    create: (this: MainGame) => void;
     placeCharacter: (this: MainGame, character: CharacterType, x: number, y: number) => BoardPiece;
     playSummonAnimation: (this: MainGame, piece: BoardPiece) => void;
 };
@@ -166,14 +157,11 @@ type MainGamePrototype = {
 const installBoardIdleAnimations = () => {
     const prototype = MainGame.prototype as unknown as MainGamePrototype;
     const originalPreload = prototype.preload;
-    const originalCreate = prototype.create;
     const originalPlaceCharacter = prototype.placeCharacter;
     const originalPlaySummonAnimation = prototype.playSummonAnimation;
 
     prototype.preload = function (this: MainGame) {
         originalPreload.call(this);
-
-        this.load.image(BOARD_TILE_TEXTURE, BOARD_TILE_PATH);
 
         Object.values(BOARD_IDLE_CONFIG).forEach((config) => {
             if (!config) {
@@ -184,21 +172,6 @@ const installBoardIdleAnimations = () => {
                 this.load.image(texture, config.paths[index]);
             });
         });
-    };
-
-    prototype.create = function (this: MainGame) {
-        originalCreate.call(this);
-
-        for (let row = 0; row < BOARD_GRID_SIZE; row++) {
-            for (let column = 0; column < BOARD_GRID_SIZE; column++) {
-                const x = BOARD_TILE_X + column * BOARD_CELL_SIZE + BOARD_CELL_SIZE / 2;
-                const y = BOARD_TILE_Y + row * BOARD_CELL_SIZE + BOARD_CELL_SIZE / 2;
-
-                this.add.image(x, y, BOARD_TILE_TEXTURE)
-                    .setDisplaySize(BOARD_CELL_SIZE, BOARD_CELL_SIZE)
-                    .setDepth(-10);
-            }
-        }
     };
 
     prototype.placeCharacter = function (
