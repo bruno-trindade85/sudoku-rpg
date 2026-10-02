@@ -136,6 +136,12 @@ const BOARD_IDLE_CONFIG: Partial<Record<UnitType, {
     }
 };
 
+const ORIGINAL_CARD_WIDTH = 140;
+const ORIGINAL_CARD_HEIGHT = 90;
+const ENLARGED_CARD_WIDTH = 148;
+const ENLARGED_CARD_HEIGHT = 96;
+const ENLARGED_CARD_SPRITE_SCALE = 2.15;
+
 type BoardPiece = {
     type: UnitType;
     sprite: Phaser.GameObjects.Image;
@@ -143,6 +149,7 @@ type BoardPiece = {
 
 type MainGamePrototype = {
     preload: (this: MainGame) => void;
+    create: (this: MainGame) => void;
     placeCharacter: (this: MainGame, character: CharacterType, x: number, y: number) => BoardPiece;
     playSummonAnimation: (this: MainGame, piece: BoardPiece) => void;
 };
@@ -157,6 +164,7 @@ type MainGamePrototype = {
 const installBoardIdleAnimations = () => {
     const prototype = MainGame.prototype as unknown as MainGamePrototype;
     const originalPreload = prototype.preload;
+    const originalCreate = prototype.create;
     const originalPlaceCharacter = prototype.placeCharacter;
     const originalPlaySummonAnimation = prototype.playSummonAnimation;
 
@@ -171,6 +179,26 @@ const installBoardIdleAnimations = () => {
             config.textures.forEach((texture, index) => {
                 this.load.image(texture, config.paths[index]);
             });
+        });
+    };
+
+    prototype.create = function (this: MainGame) {
+        originalCreate.call(this);
+
+        this.children.list.forEach((child) => {
+            if (child.type !== 'Container' || child.width !== ORIGINAL_CARD_WIDTH || child.height !== ORIGINAL_CARD_HEIGHT) {
+                return;
+            }
+
+            const card = child as Phaser.GameObjects.Container;
+            const background = card.list[0] as Phaser.GameObjects.Rectangle | undefined;
+            const unitSprite = card.list[1] as Phaser.GameObjects.Image | undefined;
+            const name = card.list[2] as Phaser.GameObjects.Text | undefined;
+
+            card.setSize(ENLARGED_CARD_WIDTH, ENLARGED_CARD_HEIGHT);
+            background?.setSize(ENLARGED_CARD_WIDTH, ENLARGED_CARD_HEIGHT).setDisplaySize(ENLARGED_CARD_WIDTH, ENLARGED_CARD_HEIGHT);
+            unitSprite?.setScale(ENLARGED_CARD_SPRITE_SCALE);
+            name?.setY(31);
         });
     };
 
