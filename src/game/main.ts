@@ -91,6 +91,20 @@ const BOARD_IDLE_CONFIG: Partial<Record<UnitType, {
         ],
         frameMs: 180,
         scale: 4
+    },
+    [UNIT_IDS.druid]: {
+        textures: [
+            'bard-idle-down-0',
+            'bard-idle-down-1',
+            'bard-idle-down-2'
+        ],
+        paths: [
+            'assets/units/bard/bard_down_0.png',
+            'assets/units/bard/bard_down_1.png',
+            'assets/units/bard/bard_down_2.png'
+        ],
+        frameMs: 180,
+        scale: 4
     }
 };
 
