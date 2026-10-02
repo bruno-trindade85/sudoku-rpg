@@ -49,6 +49,20 @@ const BOARD_IDLE_CONFIG: Partial<Record<UnitType, {
         ],
         frameMs: 180,
         scale: 4
+    },
+    [UNIT_IDS.rogue]: {
+        textures: [
+            'rogue-idle-down-0',
+            'rogue-idle-down-1',
+            'rogue-idle-down-2'
+        ],
+        paths: [
+            'assets/units/rogue/rogue_down_0.png',
+            'assets/units/rogue/rogue_down_1.png',
+            'assets/units/rogue/rogue_down_2.png'
+        ],
+        frameMs: 180,
+        scale: 4
     }
 };
 
