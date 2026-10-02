@@ -1,6 +1,7 @@
 import { Game as MainGame } from './scenes/Game';
 import { AUTO, Game, Scale, Types } from 'phaser';
 import { UNIT_IDS, type CharacterType, type UnitType } from './units/UnitConfig';
+import { getAllFormedSynergies } from './synergies/SynergyManager';
 
 const BOARD_IDLE_CONFIG: Partial<Record<UnitType, {
     textures: readonly string[];
@@ -142,9 +143,39 @@ const ENLARGED_CARD_WIDTH = 148;
 const ENLARGED_CARD_HEIGHT = 96;
 const ENLARGED_CARD_SPRITE_SCALE = 2.15;
 
+const MAGIC_CIRCLE_TEXTURES = [
+    'magic-circle-0',
+    'magic-circle-1',
+    'magic-circle-2',
+    'magic-circle-3'
+] as const;
+const MAGIC_CIRCLE_PATHS = [
+    'assets/vfx/magic_circle/magic_circle_0.png',
+    'assets/vfx/magic_circle/magic_circle_1.png',
+    'assets/vfx/magic_circle/magic_circle_2.png',
+    'assets/vfx/magic_circle/magic_circle_3.png'
+] as const;
+const MAGIC_CIRCLE_FRAME_MS = 140;
+const MAGIC_CIRCLE_SCALE = 4;
+const MAGIC_CIRCLE_Y_OFFSET = 18;
+const MAGIC_CIRCLE_DEPTH = 9;
+
 type BoardPiece = {
     type: UnitType;
     sprite: Phaser.GameObjects.Image;
+};
+
+type MagicCircleEffect = {
+    sprite: Phaser.GameObjects.Image;
+    timer: Phaser.Time.TimerEvent;
+    regionKey: string;
+};
+
+type MainGameRuntime = MainGame & {
+    boardState: {
+        getCells: () => ReadonlyMap<number, { type: UnitType }>;
+    };
+    pieceVisuals: Map<number, BoardPiece>;
 };
 
 type MainGamePrototype = {
@@ -152,14 +183,113 @@ type MainGamePrototype = {
     create: (this: MainGame) => void;
     placeCharacter: (this: MainGame, character: CharacterType, x: number, y: number) => BoardPiece;
     playSummonAnimation: (this: MainGame, piece: BoardPiece) => void;
+    refreshSynergyIndicators: (this: MainGame) => void;
+    handleRegionAttack: (this: MainGame, regionRow: number, regionColumn: number, isRepeatAttack?: boolean) => void;
+};
+
+const magicCircleEffects = new WeakMap<MainGame, Map<number, MagicCircleEffect>>();
+const attackedRegions = new WeakMap<MainGame, Set<string>>();
+
+const getRegionKey = (regionRow: number, regionColumn: number) => `${regionRow}:${regionColumn}`;
+
+const destroyMagicCircleEffect = (effect: MagicCircleEffect) => {
+    effect.timer.remove(false);
+    effect.sprite.destroy();
+};
+
+const clearMagicCircleEffects = (scene: MainGame) => {
+    const effects = magicCircleEffects.get(scene);
+    effects?.forEach(destroyMagicCircleEffect);
+    magicCircleEffects.set(scene, new Map());
+};
+
+const syncArcaneArrowMagicCircles = (scene: MainGame) => {
+    const runtime = scene as MainGameRuntime;
+    const effects = magicCircleEffects.get(scene) ?? new Map<number, MagicCircleEffect>();
+    const blockedRegions = attackedRegions.get(scene) ?? new Set<string>();
+    const activeCells = new Map<number, string>();
+
+    getAllFormedSynergies(runtime.boardState.getCells())
+        .filter((formedSynergy) => formedSynergy.definition.id === 'arcane-arrow')
+        .forEach((formedSynergy) => {
+            const regionKey = getRegionKey(formedSynergy.regionRow, formedSynergy.regionColumn);
+            if (blockedRegions.has(regionKey)) {
+                return;
+            }
+
+            formedSynergy.pair.forEach((cellIndex) => activeCells.set(cellIndex, regionKey));
+        });
+
+    effects.forEach((effect, cellIndex) => {
+        if (activeCells.has(cellIndex)) {
+            return;
+        }
+
+        destroyMagicCircleEffect(effect);
+        effects.delete(cellIndex);
+    });
+
+    activeCells.forEach((regionKey, cellIndex) => {
+        const piece = runtime.pieceVisuals.get(cellIndex);
+        if (!piece?.sprite.active) {
+            return;
+        }
+
+        const existing = effects.get(cellIndex);
+        if (existing) {
+            existing.regionKey = regionKey;
+            existing.sprite.setPosition(piece.sprite.x, piece.sprite.y + MAGIC_CIRCLE_Y_OFFSET);
+            return;
+        }
+
+        let frameIndex = 0;
+        const sprite = scene.add.image(
+            piece.sprite.x,
+            piece.sprite.y + MAGIC_CIRCLE_Y_OFFSET,
+            MAGIC_CIRCLE_TEXTURES[frameIndex]
+        )
+            .setScale(MAGIC_CIRCLE_SCALE)
+            .setDepth(MAGIC_CIRCLE_DEPTH);
+
+        const timer = scene.time.addEvent({
+            delay: MAGIC_CIRCLE_FRAME_MS,
+            loop: true,
+            callback: () => {
+                if (!sprite.active) {
+                    timer.remove(false);
+                    return;
+                }
+
+                frameIndex = (frameIndex + 1) % MAGIC_CIRCLE_TEXTURES.length;
+                sprite.setTexture(MAGIC_CIRCLE_TEXTURES[frameIndex]);
+            }
+        });
+
+        effects.set(cellIndex, { sprite, timer, regionKey });
+    });
+
+    magicCircleEffects.set(scene, effects);
+};
+
+const stopMagicCirclesInRegion = (scene: MainGame, regionRow: number, regionColumn: number) => {
+    const regionKey = getRegionKey(regionRow, regionColumn);
+    const blockedRegions = attackedRegions.get(scene) ?? new Set<string>();
+    blockedRegions.add(regionKey);
+    attackedRegions.set(scene, blockedRegions);
+
+    const effects = magicCircleEffects.get(scene);
+    effects?.forEach((effect, cellIndex) => {
+        if (effect.regionKey !== regionKey) {
+            return;
+        }
+
+        destroyMagicCircleEffect(effect);
+        effects.delete(cellIndex);
+    });
 };
 
 /**
- * Idle de unidades no tabuleiro.
- *
- * Os frames são carregados separadamente e o loop só é iniciado dentro de
- * placeCharacter(). Assim, os cards continuam estáticos e a animação aparece
- * apenas quando a unidade realmente entra no tabuleiro.
+ * Idle de unidades no tabuleiro e VFX da sinergia Flecha Arcana.
  */
 const installBoardIdleAnimations = () => {
     const prototype = MainGame.prototype as unknown as MainGamePrototype;
@@ -167,6 +297,8 @@ const installBoardIdleAnimations = () => {
     const originalCreate = prototype.create;
     const originalPlaceCharacter = prototype.placeCharacter;
     const originalPlaySummonAnimation = prototype.playSummonAnimation;
+    const originalRefreshSynergyIndicators = prototype.refreshSynergyIndicators;
+    const originalHandleRegionAttack = prototype.handleRegionAttack;
 
     prototype.preload = function (this: MainGame) {
         originalPreload.call(this);
@@ -180,9 +312,16 @@ const installBoardIdleAnimations = () => {
                 this.load.image(texture, config.paths[index]);
             });
         });
+
+        MAGIC_CIRCLE_TEXTURES.forEach((texture, index) => {
+            this.load.image(texture, MAGIC_CIRCLE_PATHS[index]);
+        });
     };
 
     prototype.create = function (this: MainGame) {
+        clearMagicCircleEffects(this);
+        attackedRegions.set(this, new Set());
+
         originalCreate.call(this);
 
         this.children.list.forEach((child) => {
@@ -200,6 +339,21 @@ const installBoardIdleAnimations = () => {
             unitSprite?.setScale(ENLARGED_CARD_SPRITE_SCALE);
             name?.setY(31);
         });
+    };
+
+    prototype.refreshSynergyIndicators = function (this: MainGame) {
+        originalRefreshSynergyIndicators.call(this);
+        syncArcaneArrowMagicCircles(this);
+    };
+
+    prototype.handleRegionAttack = function (
+        this: MainGame,
+        regionRow: number,
+        regionColumn: number,
+        isRepeatAttack = false
+    ) {
+        stopMagicCirclesInRegion(this, regionRow, regionColumn);
+        originalHandleRegionAttack.call(this, regionRow, regionColumn, isRepeatAttack);
     };
 
     prototype.placeCharacter = function (
