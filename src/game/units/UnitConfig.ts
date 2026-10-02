@@ -13,15 +13,15 @@ export const UNIT_IDS = {
 export type UnitType = typeof UNIT_IDS[keyof typeof UNIT_IDS];
 
 export const UNIT_TEXTURES: Readonly<Record<UnitType, string>> = {
-    [UNIT_IDS.mage]: 'mage',
-    [UNIT_IDS.archer]: 'archer',
-    [UNIT_IDS.paladin]: 'paladin',
-    [UNIT_IDS.rogue]: 'rogue',
-    [UNIT_IDS.cleric]: 'cleric',
-    [UNIT_IDS.barbarian]: 'barbarian',
-    [UNIT_IDS.druid]: 'druid',
-    [UNIT_IDS.darkSorcerer]: 'dark-sorcerer',
-    [UNIT_IDS.summoner]: 'summoner'
+    [UNIT_IDS.mage]: 'mage/mage_down_0',
+    [UNIT_IDS.archer]: 'archer/archer_down_0',
+    [UNIT_IDS.paladin]: 'knight/knight_down_0',
+    [UNIT_IDS.rogue]: 'rogue/rogue_down_0',
+    [UNIT_IDS.cleric]: 'cleric/cleric_down_0',
+    [UNIT_IDS.barbarian]: 'barbarian/barbarian_down_0',
+    [UNIT_IDS.druid]: 'bard/bard_down_0',
+    [UNIT_IDS.darkSorcerer]: 'necromancer/necromancer_down_0',
+    [UNIT_IDS.summoner]: 'villager/villager_down_0'
 };
 
 export const UNIT_SPRITE_FLIP_X: Readonly<Record<UnitType, boolean>> = {
