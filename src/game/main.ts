@@ -77,6 +77,20 @@ const BOARD_IDLE_CONFIG: Partial<Record<UnitType, {
         ],
         frameMs: 180,
         scale: 4
+    },
+    [UNIT_IDS.barbarian]: {
+        textures: [
+            'barbarian-idle-down-0',
+            'barbarian-idle-down-1',
+            'barbarian-idle-down-2'
+        ],
+        paths: [
+            'assets/units/barbarian/barbarian_down_0.png',
+            'assets/units/barbarian/barbarian_down_1.png',
+            'assets/units/barbarian/barbarian_down_2.png'
+        ],
+        frameMs: 180,
+        scale: 4
     }
 };
 
